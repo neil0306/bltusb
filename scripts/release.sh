@@ -64,7 +64,8 @@ esac
 [[ "$NEW" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "computed version invalid: $NEW"
 TAG="v$NEW"
 
-say "Release $CUR → $NEW  (tag $TAG)${DRY_RUN:+  [DRY RUN]}"
+DR_LABEL=""; [[ $DRY_RUN -eq 1 ]] && DR_LABEL="  [DRY RUN]"
+say "Release $CUR → $NEW  (tag $TAG)$DR_LABEL"
 git rev-parse "$TAG" >/dev/null 2>&1 && die "tag $TAG already exists"
 
 # ---- 1. bump VERSION ----
@@ -130,4 +131,5 @@ run "git -C '$TAP_DIR' push origin HEAD"
 ok "tap updated to $NEW"
 
 say "Done 🎉  Users can now:  brew update && brew upgrade bltusb"
-[[ $DRY_RUN -eq 1 ]] && say "(dry run — nothing was changed)"
+if [[ $DRY_RUN -eq 1 ]]; then say "(dry run — nothing was changed)"; fi
+exit 0
