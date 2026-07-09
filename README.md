@@ -4,6 +4,10 @@
 
 # bltusb
 
+[![ShellCheck](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
+
 A command-line tool to **read and write BitLocker-encrypted USB drives on macOS (Apple Silicon)**.
 
 Built on top of the open-source [anylinuxfs](https://github.com/nohajc/anylinuxfs): **no macFUSE, no kernel extension, no reduced system security, no reboot**. It runs a tiny Alpine Linux microVM that decrypts BitLocker and reads/writes NTFS using native Linux drivers, then mounts the volume back to macOS over NFS.

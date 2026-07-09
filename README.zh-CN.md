@@ -4,6 +4,10 @@
 
 # bltusb
 
+[![ShellCheck](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
+
 在 **macOS (Apple Silicon)** 上读写 **BitLocker** 加密 U 盘的命令行工具。
 
 底层基于开源的 [anylinuxfs](https://github.com/nohajc/anylinuxfs)，**不需要 macFUSE、不需要内核扩展、不需要降低系统安全性、不需要重启**。它在后台跑一个极小的 Alpine Linux microVM，在 VM 里用 Linux 原生驱动解密 BitLocker 并读写 NTFS，再通过 NFS 把卷挂回 macOS。
