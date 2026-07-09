@@ -5,6 +5,7 @@
 # bltusb
 
 [![ShellCheck](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml)
+[![Test](https://github.com/neil0306/bltusb/actions/workflows/test.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
 
@@ -111,6 +112,17 @@ ALFS_PASSPHRASE='你的密码' bltusb mount
 - 设备号（`diskN`）每次插拔可能变化；向导每次都会重新检测，未固定 `DEVICE` 时会自动识别 BitLocker 卷。
 - 默认**只读**，改文件时才用 `rw`，降低误操作风险。
 - 配置文件在 `~/.config/bltusb/config`，只存设备号、默认模式和语言，**不含密码**。
+
+## 测试
+
+```bash
+test/bltusb_test.sh smoke      # 离线检查（CI 里也跑这个）
+test/bltusb_test.sh hardware   # 真机 BitLocker U 盘：挂载/读写/速度（macOS，本地）
+test/bltusb_test.sh all
+```
+
+- **smoke** —— 版本、三语帮助、语言切换、参数处理。不需要 U 盘；Linux/macOS 和 CI 都能跑。
+- **hardware** —— 对真盘端到端：detect → 只读/读写挂载 → 读回 → md5 完整性 → 读写速度 → 清理。**非破坏性**（只碰 `bltusb_selftest_*` 文件），且在没有 BitLocker 盘 / 没有密码 / 非 macOS 时**自动跳过**——所以没插 U 盘时 `test/bltusb_test.sh all` 依然是绿的。
 
 ## 依赖
 

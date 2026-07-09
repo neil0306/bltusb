@@ -13,4 +13,4 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run ShellCheck
         # ubuntu-latest runners ship shellcheck preinstalled
-        run: shellcheck bltusb
+        run: shellcheck bltusb test/bltusb_test.sh

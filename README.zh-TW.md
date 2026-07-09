@@ -5,6 +5,7 @@
 # bltusb
 
 [![ShellCheck](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml)
+[![Test](https://github.com/neil0306/bltusb/actions/workflows/test.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
 
@@ -111,6 +112,17 @@ ALFS_PASSPHRASE='你的密碼' bltusb mount
 - 裝置編號（`diskN`）每次插拔可能變動；向導每次都會重新偵測，未固定 `DEVICE` 時會自動辨識 BitLocker 磁碟區。
 - 預設**唯讀**，改檔案時才用 `rw`，降低誤操作風險。
 - 設定檔在 `~/.config/bltusb/config`，只存裝置編號、預設模式和語言，**不含密碼**。
+
+## 測試
+
+```bash
+test/bltusb_test.sh smoke      # 離線檢查（CI 裡也跑這個）
+test/bltusb_test.sh hardware   # 真機 BitLocker 隨身碟：掛載/讀寫/速度（macOS，本地）
+test/bltusb_test.sh all
+```
+
+- **smoke** —— 版本、三語說明、語言切換、參數處理。不需要隨身碟；Linux/macOS 和 CI 都能跑。
+- **hardware** —— 對真磁碟端到端：detect → 唯讀/讀寫掛載 → 讀回 → md5 完整性 → 讀寫速度 → 清理。**非破壞性**（只碰 `bltusb_selftest_*` 檔案），且在沒有 BitLocker 磁碟 / 沒有密碼 / 非 macOS 時**自動跳過**——所以沒插隨身碟時 `test/bltusb_test.sh all` 依然是綠的。
 
 ## 相依
 

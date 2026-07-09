@@ -1,0 +1,18 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Smoke tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run smoke suite
+        # Offline suite: no diskutil/security/sudo. The hardware suite (real
+        # BitLocker USB) auto-skips in CI, so this stays green everywhere.
+        run: bash test/bltusb_test.sh smoke

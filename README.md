@@ -5,6 +5,7 @@
 # bltusb
 
 [![ShellCheck](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/shellcheck.yml)
+[![Test](https://github.com/neil0306/bltusb/actions/workflows/test.yml/badge.svg)](https://github.com/neil0306/bltusb/actions/workflows/test.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
 
@@ -111,6 +112,17 @@ ALFS_PASSPHRASE='your-password' bltusb mount
 - Device numbers (`diskN`) can change on each replug; the wizard always re-detects, and when `DEVICE` is not pinned the BitLocker volume is auto-detected.
 - **Read-only by default**; use `rw` only when you need to modify files, to reduce the risk of accidents.
 - The config file lives at `~/.config/bltusb/config` and stores only the device, default mode, and language — **never the password**.
+
+## Testing
+
+```bash
+test/bltusb_test.sh smoke      # offline checks (also run in CI)
+test/bltusb_test.sh hardware   # real BitLocker USB: mount/read/write/speed (macOS, local)
+test/bltusb_test.sh all
+```
+
+- **smoke** — version, trilingual help, language switching, argument handling. No drive needed; runs on Linux/macOS and in CI.
+- **hardware** — end-to-end against a real drive: detect → read-only/read-write mount → read-back → md5 integrity → read/write speed → cleanup. It is **non-destructive** (only touches `bltusb_selftest_*` files) and **auto-skips** when there's no BitLocker drive, no password, or the host isn't macOS — so `test/bltusb_test.sh all` stays green even without the USB.
 
 ## Requirements
 
