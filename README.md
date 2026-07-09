@@ -9,14 +9,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
 
-A command-line tool to **read and write BitLocker-encrypted USB drives on macOS (Apple Silicon)**.
+A command-line tool to **read and write BitLocker, NTFS, exFAT and other drives on macOS (Apple Silicon)** — including the ones macOS can't write natively (NTFS) or open at all (BitLocker).
 
-Built on top of the open-source [anylinuxfs](https://github.com/nohajc/anylinuxfs): **no macFUSE, no kernel extension, no reduced system security, no reboot**. It runs a tiny Alpine Linux microVM that decrypts BitLocker and reads/writes NTFS using native Linux drivers, then mounts the volume back to macOS over NFS.
+Built on top of the open-source [anylinuxfs](https://github.com/nohajc/anylinuxfs): **no macFUSE, no kernel extension, no reduced system security, no reboot**. It runs a tiny Alpine Linux microVM that uses native Linux drivers to read/write the volume, then mounts it back to macOS over NFS.
 
 - ✅ **Just run `bltusb`** — it detects your drives, lets you pick one, and mounts it
+- ✅ **Any filesystem anylinuxfs supports** — BitLocker, NTFS, exFAT, ext4, … Encrypted volumes ask for a password; plain drives don't.
 - ✅ Read-only **and** read-write
 - ✅ Password stored in the macOS Keychain (never written to disk in plaintext)
-- ✅ Auto-detects which partition is the BitLocker volume (reads the volume signature)
+- ✅ Auto-detects each partition's filesystem and which ones are encrypted (reads on-disk signatures)
 - ✅ **Multilingual UI** (English / 简体中文 / 繁體中文), auto-detected from your system
 - ✅ Colored help, friendly prompts, read-only by default for safety
 
@@ -78,7 +79,7 @@ bltusb umount          # unmount when done
 | `bltusb open [ro\|rw]` | Mount and open in Finder (or just open if already mounted) |
 | `bltusb umount` / `unmount` | Unmount |
 | `bltusb status` | Show mount status and external disks |
-| `bltusb detect` | Scan and identify which partition is a BitLocker volume |
+| `bltusb detect` | Show each external partition's filesystem (marks encrypted ones) |
 | `bltusb install` | Install anylinuxfs |
 | `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | Configuration |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | Switch menu language |

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# bltusb — read/write BitLocker-encrypted USB drives on macOS (Apple Silicon)
-#          在 macOS 上读写 BitLocker 加密 U 盘 / 在 macOS 上讀寫 BitLocker 加密隨身碟
+# bltusb — read/write BitLocker, NTFS, exFAT & more on macOS (Apple Silicon)
+#          在 macOS 上读写 BitLocker / NTFS / exFAT 等外接盘
 #
 # Backed by the open-source anylinuxfs (no macFUSE / no kernel extension /
 # no reduced system security). Run `bltusb` with no arguments for a guided,
@@ -95,10 +95,10 @@ t() {
     inst.done)        en="Installed"; zh_cn="安装完成"; zh_tw="安裝完成" ;;
     inst.missing)     en="anylinuxfs still not found after install"; zh_cn="安装后仍找不到 anylinuxfs"; zh_tw="安裝後仍找不到 anylinuxfs" ;;
     det.nodisk)       en="No external disk found, please plug in the USB drive"; zh_cn="没有发现任何外接磁盘，请插入 U 盘"; zh_tw="找不到任何外接磁碟，請插入隨身碟" ;;
-    det.multi)        en="Multiple BitLocker partitions found: %s"; zh_cn="识别到多个 BitLocker 分区：%s"; zh_tw="辨識到多個 BitLocker 分割區：%s" ;;
+    det.multi)        en="Multiple mountable partitions found: %s"; zh_cn="发现多个可挂载分区：%s"; zh_tw="發現多個可掛載分割區：%s" ;;
     det.hintcfg)      en="Pick one via 'bltusb config', or pass it explicitly: bltusb mount ro /dev/diskXsY"; zh_cn="请用 'bltusb config' 指定，或挂载时显式传设备：bltusb mount ro /dev/diskXsY"; zh_tw="請用 'bltusb config' 指定，或掛載時明確傳入裝置：bltusb mount ro /dev/diskXsY" ;;
     det.onlyone)      en="Could not confirm by signature, but there is only one external partition, using it: %s"; zh_cn="未能用签名确认，但只有一个外接分区，采用它：%s"; zh_tw="無法用簽章確認，但只有一個外接分割區，採用它：%s" ;;
-    det.cantauto)     en="Cannot auto-determine the BitLocker partition, candidates: %s"; zh_cn="无法自动确定 BitLocker 分区，候选：%s"; zh_tw="無法自動判定 BitLocker 分割區，候選：%s" ;;
+    det.cantauto)     en="Cannot auto-determine which partition to mount, candidates: %s"; zh_cn="无法自动确定要挂载哪个分区，候选：%s"; zh_tw="無法自動判定要掛載哪個分割區，候選：%s" ;;
     det.hintcfg2)     en="Set DEVICE via 'bltusb config', or pass it explicitly: bltusb mount ro /dev/diskXsY"; zh_cn="请用 'bltusb config' 设置 DEVICE，或挂载时显式传：bltusb mount ro /dev/diskXsY"; zh_tw="請用 'bltusb config' 設定 DEVICE，或掛載時明確傳入：bltusb mount ro /dev/diskXsY" ;;
     mnt.already)      en="Already mounted: %s"; zh_cn="已经有挂载：%s"; zh_tw="已經掛載：%s" ;;
     mnt.switchhint)   en="To change mode, unmount first: bltusb umount"; zh_cn="如需换模式，请先卸载：bltusb umount"; zh_tw="如需換模式，請先卸載：bltusb umount" ;;
@@ -117,11 +117,13 @@ t() {
     st.none)          en="Nothing mounted"; zh_cn="当前无挂载"; zh_tw="目前無掛載" ;;
     st.extdisks)      en="External disks"; zh_cn="外接磁盘"; zh_tw="外接磁碟" ;;
     st.noext)         en="No external disks"; zh_cn="无外接磁盘"; zh_tw="無外接磁碟" ;;
-    det.header)       en="Detecting BitLocker partitions (reading the signature may need sudo)"; zh_cn="识别 BitLocker 分区（读取签名可能需要 sudo）"; zh_tw="辨識 BitLocker 分割區（讀取簽章可能需要 sudo）" ;;
+    det.header)       en="Detecting filesystems (reading signatures may need sudo)"; zh_cn="识别文件系统（读取签名可能需要 sudo）"; zh_tw="辨識檔案系統（讀取簽章可能需要 sudo）" ;;
     det.nopart)       en="No external partitions"; zh_cn="没有外接分区"; zh_tw="沒有外接分割區" ;;
     det.isbl)         en="%s  <- BitLocker volume"; zh_cn="%s  ← 是 BitLocker 卷"; zh_tw="%s  ← 是 BitLocker 磁碟區" ;;
     det.notbl)        en="%s (not BitLocker, or no permission to read signature)"; zh_cn="%s（非 BitLocker 或无权限读取签名）"; zh_tw="%s（非 BitLocker 或無權限讀取簽章）" ;;
-    det.noconfirm)    en="Could not confirm a BitLocker volume (maybe insufficient permission; try: sudo bltusb detect)"; zh_cn="没能确认到 BitLocker 卷（可能是权限不足，试试 sudo bltusb detect）"; zh_tw="無法確認到 BitLocker 磁碟區（可能權限不足，試試 sudo bltusb detect）" ;;
+    det.noconfirm)    en="No mountable filesystem found (maybe insufficient permission; try: sudo bltusb detect)"; zh_cn="未发现可挂载的文件系统（可能权限不足，试试 sudo bltusb detect）"; zh_tw="未發現可掛載的檔案系統（可能權限不足，試試 sudo bltusb detect）" ;;
+    fs.encrypted)     en="encrypted"; zh_cn="加密"; zh_tw="加密" ;;
+    mnt.noenc)        en="Detected %s (unencrypted) — no password needed"; zh_cn="检测到 %s（未加密）—— 无需密码"; zh_tw="偵測到 %s（未加密）—— 無需密碼" ;;
     open.done)        en="Opened in Finder"; zh_cn="已在 Finder 打开"; zh_tw="已在 Finder 開啟" ;;
     cfg.header)       en="Current configuration"; zh_cn="当前配置"; zh_tw="目前設定" ;;
     cfg.file)         en="Config file"; zh_cn="配置文件"; zh_tw="設定檔" ;;
@@ -250,6 +252,14 @@ get_passphrase() {
   printf '%s' "$pw"
 }
 
+# Like get_passphrase but never prompts — returns a stored password or nothing.
+# Used for filesystems we couldn't classify: if it turns out to be encrypted a
+# stored password unlocks it; if it's plain, anylinuxfs ignores the value.
+get_passphrase_quiet() {
+  if [[ -n "${ALFS_PASSPHRASE:-}" ]]; then printf '%s' "$ALFS_PASSPHRASE"; return 0; fi
+  keychain_get
+}
+
 # ---------------------------------------------------------------------------
 # Dependency check / install
 # ---------------------------------------------------------------------------
@@ -285,17 +295,43 @@ cmd_install() {
 # ---------------------------------------------------------------------------
 # Device detection
 # ---------------------------------------------------------------------------
-# Whether a partition is a BitLocker volume (reads the -FVE-FS- signature at
-# offset 3). Needs sudo to read the raw device.
-is_bitlocker() {
-  local dev="$1" sig
-  dev="${dev#/dev/}"
-  # Raw char devices require sector-aligned reads, so read one 512B sector and
-  # then slice bytes 3..10 (a bare `dd bs=1 skip=3` on /dev/rdiskN fails with
-  # "Invalid argument").
-  sig="$(sudo -n dd if="/dev/r${dev}" bs=512 count=1 2>/dev/null | dd bs=1 skip=3 count=8 2>/dev/null | tr -d '\0' || true)"
-  [[ "$sig" == "$BITLOCKER_SIGNATURE" ]]
+# Read <count> bytes at absolute byte <offset> from a raw device. Raw char
+# devices require sector-aligned reads, so read the containing 512B sector and
+# then slice (a bare `dd bs=1 skip=N` on /dev/rdiskN fails with "Invalid
+# argument"). Needs sudo.
+_devbytes() {
+  local dev="${1#/dev/}" off="$2" cnt="$3" sec rem
+  sec=$(( off / 512 )); rem=$(( off % 512 ))
+  sudo -n dd if="/dev/r${dev}" bs=512 count=1 skip="$sec" 2>/dev/null \
+    | dd bs=1 skip="$rem" count="$cnt" 2>/dev/null
 }
+
+# Classify a partition's filesystem from its on-disk signatures.
+# Echoes one of: bitlocker luks ntfs exfat fat ext apfs unknown
+fstype() {
+  local dev="$1" oem
+  # Every read is non-fatal (|| true): a failed sudo/dd must yield "unknown",
+  # never abort the script under `set -euo pipefail`.
+  oem="$(_devbytes "$dev" 3 8 | LC_ALL=C tr -d '\000' || true)"
+  case "$oem" in
+    "$BITLOCKER_SIGNATURE") echo bitlocker; return ;;
+    NTFS*)                  echo ntfs;  return ;;
+    EXFAT*)                 echo exfat; return ;;
+  esac
+  [[ "$(_devbytes "$dev" 0 4 | LC_ALL=C tr -d '\000' || true)" == "LUKS" ]] && { echo luks; return; }
+  case "$(_devbytes "$dev" 82 8 | LC_ALL=C tr -d '\000' || true)" in FAT32*) echo fat; return ;; esac
+  case "$(_devbytes "$dev" 54 8 | LC_ALL=C tr -d '\000' || true)" in FAT12*|FAT16*) echo fat; return ;; esac
+  [[ "$(_devbytes "$dev" 32 4 | LC_ALL=C tr -d '\000' || true)" == "NXSB" ]] && { echo apfs; return; }
+  [[ "$(_devbytes "$dev" 1080 2 | xxd -p 2>/dev/null || true)" == "53ef" ]] && { echo ext; return; }
+  echo unknown
+}
+
+# Does this filesystem need a passphrase to unlock?
+fs_is_encrypted() { case "$1" in bitlocker|luks) return 0 ;; *) return 1 ;; esac; }
+# A known, plain (non-encrypted) filesystem we can mount without a password.
+fs_is_plain()     { case "$1" in ntfs|exfat|ext|fat) return 0 ;; *) return 1 ;; esac; }
+# Is this a filesystem anylinuxfs can mount for us?
+fs_is_mountable() { case "$1" in bitlocker|luks|ntfs|exfat|ext|fat) return 0 ;; *) return 1 ;; esac; }
 
 # Heuristic: does the partition type look like a Windows/BitLocker volume?
 looks_windows() {
@@ -321,32 +357,34 @@ list_partition_rows() {
     }'
 }
 
-# Auto-detect the BitLocker partition: prefer signature match; otherwise fall
-# back to "the only external partition".
+# Auto-detect a mountable partition: prefer an encrypted one, else any
+# filesystem anylinuxfs can mount. EFI system partitions are never candidates.
 autodetect_device() {
-  local parts detected=() p
-  parts="$(list_external_partitions)"
-  [[ -n "$parts" ]] || { err "$(t det.nodisk)"; return 1; }
+  local rows enc=() mnt=() all=() id type fst
+  rows="$(list_partition_rows)"
+  [[ -n "$rows" ]] || { err "$(t det.nodisk)"; return 1; }
 
-  while IFS= read -r p; do
-    [[ -n "$p" ]] || continue
-    if is_bitlocker "$p" 2>/dev/null; then detected+=("/dev/$p"); fi
-  done <<< "$parts"
+  sudo -v 2>/dev/null || true   # prime sudo so the signature reads succeed
+  while IFS=$'\t' read -r id _ type; do
+    [[ -n "$id" ]] || continue
+    [[ "$type" == EFI* ]] && continue        # never auto-mount EFI system partitions
+    all+=("/dev/$id")
+    fst="$(fstype "$id")"
+    fs_is_encrypted "$fst" && enc+=("/dev/$id")
+    fs_is_mountable "$fst" && mnt+=("/dev/$id")
+  done <<< "$rows"
 
-  if [[ ${#detected[@]} -eq 1 ]]; then
-    printf '%s' "${detected[0]}"; return 0
-  elif [[ ${#detected[@]} -gt 1 ]]; then
-    err "$(t det.multi "${detected[*]}")"
-    err "$(t det.hintcfg)"
-    return 1
+  # prefer a single encrypted volume, else a single mountable volume
+  if [[ ${#enc[@]} -eq 1 ]]; then printf '%s' "${enc[0]}"; return 0; fi
+  if [[ ${#enc[@]} -gt 1 ]]; then err "$(t det.multi "${enc[*]}")"; err "$(t det.hintcfg)"; return 1; fi
+  if [[ ${#mnt[@]} -eq 1 ]]; then printf '%s' "${mnt[0]}"; return 0; fi
+  if [[ ${#mnt[@]} -gt 1 ]]; then err "$(t det.multi "${mnt[*]}")"; err "$(t det.hintcfg)"; return 1; fi
+
+  if [[ ${#all[@]} -eq 1 ]]; then
+    warn "$(t det.onlyone "${all[0]}")"
+    printf '%s' "${all[0]}"; return 0
   fi
-
-  local arr=(); while IFS= read -r p; do [[ -n "$p" ]] && arr+=("/dev/$p"); done <<< "$parts"
-  if [[ ${#arr[@]} -eq 1 ]]; then
-    warn "$(t det.onlyone "${arr[0]}")"
-    printf '%s' "${arr[0]}"; return 0
-  fi
-  err "$(t det.cantauto "${arr[*]:-N/A}")"
+  err "$(t det.cantauto "${all[*]:-N/A}")"
   err "$(t det.hintcfg2)"
   return 1
 }
@@ -370,18 +408,37 @@ is_mounted() { [[ -n "$(current_mountpoint)" ]]; }
 # perform_mount <device> <ro|rw> <do_open:true|false>
 perform_mount() {
   local dev="$1" mode="$2" do_open="${3:-false}"
-  local pass; pass="$(get_passphrase)"
+
+  sudo -v 2>/dev/null || true                      # prime sudo (mounting needs root anyway)
+  local fst; fst="$(fstype "$dev")"    # so we know whether a passphrase is needed
+  local pass=""
+  if fs_is_encrypted "$fst"; then
+    pass="$(get_passphrase)"                       # definitely encrypted → need it
+  elif fs_is_plain "$fst"; then
+    info "${C_DIM}$(t mnt.noenc "$fst")${C_RESET}" # known plain fs → no password
+  else
+    pass="$(get_passphrase_quiet)"                 # unknown → use a stored one if any
+  fi
+
   local opts=(-w false)
   # Fail closed: only an explicit "rw" gets read-write; anything else is read-only.
   [[ "$mode" == "rw" ]] || opts+=(-o ro)
 
   step "$(t mnt.mounting "$dev" "$mode")"
   [[ "$mode" == "rw" ]] && warn "$(t mnt.rwwarn)"
-  info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
 
-  # Pass the passphrase via the environment (not as a sudo argv), so it never
-  # appears in `ps`. --preserve-env keeps it across sudo's env reset.
-  if ALFS_PASSPHRASE="$pass" sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "${opts[@]}" "$dev"; then
+  local rc=0
+  if [[ -n "$pass" ]]; then
+    info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
+    # Pass the passphrase via the environment (not a sudo argv) so it never
+    # shows in `ps`. --preserve-env keeps it across sudo's env reset.
+    ALFS_PASSPHRASE="$pass" sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "${opts[@]}" "$dev" || rc=$?
+  else
+    info "sudo anylinuxfs mount ${opts[*]} ${dev}"
+    sudo anylinuxfs mount "${opts[@]}" "$dev" || rc=$?
+  fi
+
+  if [[ $rc -eq 0 ]]; then
     local mp; mp="$(current_mountpoint)"
     ok "$(t mnt.success "${mp:+ → $mp}")  ${C_DIM}(${mode})${C_RESET}"
     [[ -n "$mp" ]] && printf '   %s\n' "${C_DIM}$(t mnt.cd "$mp")${C_RESET}"
@@ -408,34 +465,32 @@ cmd_auto() {
   fi
 
   step "$(t wiz.detecting)"
-  local ids=() sizes=() types=() isbl=() rec=0 n=0 id size type
+  sudo -v 2>/dev/null || true   # prime sudo so filesystem detection can read signatures
+  local ids=() sizes=() types=() fsts=() rec=0 rec_enc=0 rec_any=0 n=0 id size type fst
   while IFS=$'\t' read -r id size type; do
     [[ -n "$id" ]] || continue
-    ids+=("$id"); sizes+=("$size"); types+=("$type")
-    if is_bitlocker "$id" 2>/dev/null; then isbl+=("bl"); [[ $rec -eq 0 ]] && rec=$((n+1))
-    elif looks_windows "$type"; then isbl+=("win"); [[ $rec -eq 0 ]] && rec=$((n+1))
-    else isbl+=("no"); fi
+    fst="$(fstype "$id")"
+    ids+=("$id"); sizes+=("$size"); types+=("$type"); fsts+=("$fst")
+    fs_is_encrypted "$fst" && [[ $rec_enc -eq 0 ]] && rec_enc=$((n+1))
+    if fs_is_mountable "$fst" && [[ $rec_any -eq 0 && "$type" != EFI* ]]; then rec_any=$((n+1)); fi
     n=$((n+1))
   done <<< "$(list_partition_rows)"
 
   [[ $n -gt 0 ]] || { err "$(t wiz.none)"; return 1; }
-  [[ $rec -eq 0 ]] && rec=1
+  if [[ $rec_enc -gt 0 ]]; then rec=$rec_enc; elif [[ $rec_any -gt 0 ]]; then rec=$rec_any; else rec=1; fi
 
   local choice="$rec"
   if [[ $n -eq 1 ]]; then
     choice=1
-    info "/dev/${ids[0]}  ${C_DIM}${sizes[0]}  ${types[0]}${C_RESET}"
+    info "/dev/${ids[0]}  ${C_DIM}${sizes[0]}  ${fsts[0]}${C_RESET}"
   else
     echo; printf '%s\n' "$(t wiz.pick)"
-    local i tag
+    local i mark
     for ((i=0; i<n; i++)); do
-      tag=""
-      case "${isbl[$i]}" in
-        bl)  tag="  ${C_GRN}BitLocker${C_RESET}" ;;
-        win) tag="  ${C_YEL}Windows${C_RESET}" ;;
-      esac
-      [[ $((i+1)) -eq $rec ]] && tag="$tag  ${C_DIM}($(t wiz.recommended))${C_RESET}"
-      printf '  %s) %-12s %-9s %s%s\n' "$((i+1))" "/dev/${ids[$i]}" "${sizes[$i]}" "${types[$i]}" "$tag"
+      if fs_is_mountable "${fsts[$i]}"; then mark="${C_GRN}${fsts[$i]}${C_RESET}"; else mark="${C_DIM}${fsts[$i]}${C_RESET}"; fi
+      fs_is_encrypted "${fsts[$i]}" && mark="$mark ${C_YEL}🔒${C_RESET}"
+      [[ $((i+1)) -eq $rec ]] && mark="$mark ${C_DIM}($(t wiz.recommended))${C_RESET}"
+      printf '  %s) %-12s %-9s %-16s %s\n' "$((i+1))" "/dev/${ids[$i]}" "${sizes[$i]}" "${types[$i]}" "$mark"
     done
     printf '%s' "$(t wiz.devask "$rec")"
     local ans; read -r ans
@@ -529,16 +584,22 @@ cmd_status() {
 
 cmd_detect() {
   step "$(t det.header)"
-  local parts p any="false"
+  sudo -v 2>/dev/null || true
+  local parts p fst any="false"
   parts="$(list_external_partitions)"
   [[ -n "$parts" ]] || { info "$(t det.nopart)"; return 0; }
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
-    if is_bitlocker "$p" 2>/dev/null; then
-      ok "$(t det.isbl "${C_GRN}/dev/$p${C_RESET}")"
+    fst="$(fstype "$p")"
+    if fs_is_mountable "$fst"; then
       any="true"
+      if fs_is_encrypted "$fst"; then
+        ok "${C_GRN}/dev/$p${C_RESET}  ${C_BOLD}$fst${C_RESET}  ${C_YEL}🔒 $(t fs.encrypted)${C_RESET}"
+      else
+        ok "${C_GRN}/dev/$p${C_RESET}  ${C_BOLD}$fst${C_RESET}"
+      fi
     else
-      printf '   %s\n' "${C_DIM}$(t det.notbl "/dev/$p")${C_RESET}"
+      printf '   %s\n' "${C_DIM}/dev/$p  $fst${C_RESET}"
     fi
   done <<< "$parts"
   [[ "$any" == "true" ]] || warn "$(t det.noconfirm)"
@@ -638,12 +699,13 @@ cmd_lang() {
 # ---------------------------------------------------------------------------
 help_en() {
   cat <<EOF
-${C_BOLD}bltusb${C_RESET} v${VERSION} — read/write BitLocker-encrypted USB drives on macOS
+${C_BOLD}bltusb${C_RESET} v${VERSION} — read/write BitLocker, NTFS, exFAT & more on macOS
 ${C_DIM}Backend: anylinuxfs (open source, no macFUSE / kernel extension / reduced security)${C_RESET}
 
 ${C_BOLD}Quick start${C_RESET}
   Just run ${C_CYN}bltusb${C_RESET} with no arguments — it detects your external drives,
-  lets you pick one, and mounts it (read-only by default).
+  lets you pick one, and mounts it (read-only by default). Encrypted volumes
+  (BitLocker) ask for a password; plain drives (NTFS/exFAT/…) don't.
 
 ${C_BOLD}Usage${C_RESET}
   bltusb [command] [args]
@@ -671,12 +733,12 @@ EOF
 
 help_zh_cn() {
   cat <<EOF
-${C_BOLD}bltusb${C_RESET} v${VERSION} — 在 macOS 上读写 BitLocker 加密 U 盘
+${C_BOLD}bltusb${C_RESET} v${VERSION} — 在 macOS 上读写 BitLocker / NTFS / exFAT 等
 ${C_DIM}底层：anylinuxfs（开源，无需 macFUSE / 内核扩展 / 降低系统安全性）${C_RESET}
 
 ${C_BOLD}快速开始${C_RESET}
   直接运行 ${C_CYN}bltusb${C_RESET}（不带参数）—— 自动检测外接设备，让你选一个，
-  然后挂载（默认只读）。
+  然后挂载（默认只读）。加密盘（BitLocker）会问密码，普通盘（NTFS/exFAT/…）不问。
 
 ${C_BOLD}用法${C_RESET}
   bltusb [命令] [参数]
@@ -704,12 +766,12 @@ EOF
 
 help_zh_tw() {
   cat <<EOF
-${C_BOLD}bltusb${C_RESET} v${VERSION} — 在 macOS 上讀寫 BitLocker 加密隨身碟
+${C_BOLD}bltusb${C_RESET} v${VERSION} — 在 macOS 上讀寫 BitLocker / NTFS / exFAT 等
 ${C_DIM}底層：anylinuxfs（開源，無需 macFUSE / 核心擴充 / 降低系統安全性）${C_RESET}
 
 ${C_BOLD}快速開始${C_RESET}
   直接執行 ${C_CYN}bltusb${C_RESET}（不帶參數）—— 自動偵測外接裝置，讓你選一個，
-  然後掛載（預設唯讀）。
+  然後掛載（預設唯讀）。加密碟（BitLocker）會問密碼，普通碟（NTFS/exFAT/…）不問。
 
 ${C_BOLD}用法${C_RESET}
   bltusb [命令] [參數]

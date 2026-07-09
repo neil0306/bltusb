@@ -9,14 +9,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 ![Platform](https://img.shields.io/badge/platform-macOS%20(Apple%20Silicon)-black)
 
-在 **macOS (Apple Silicon)** 上读写 **BitLocker** 加密 U 盘的命令行工具。
+在 **macOS (Apple Silicon)** 上读写 **BitLocker / NTFS / exFAT 等**外接盘的命令行工具 —— 包括 macOS 原生不能写(NTFS)或根本打不开(BitLocker)的那些。
 
-底层基于开源的 [anylinuxfs](https://github.com/nohajc/anylinuxfs)，**不需要 macFUSE、不需要内核扩展、不需要降低系统安全性、不需要重启**。它在后台跑一个极小的 Alpine Linux microVM，在 VM 里用 Linux 原生驱动解密 BitLocker 并读写 NTFS，再通过 NFS 把卷挂回 macOS。
+底层基于开源的 [anylinuxfs](https://github.com/nohajc/anylinuxfs)，**不需要 macFUSE、不需要内核扩展、不需要降低系统安全性、不需要重启**。它在后台跑一个极小的 Alpine Linux microVM，用 Linux 原生驱动读写卷，再通过 NFS 把卷挂回 macOS。
 
 - ✅ **直接运行 `bltusb`** —— 自动检测设备、让你选一个、然后挂载
+- ✅ **anylinuxfs 支持的任意文件系统** —— BitLocker、NTFS、exFAT、ext4… 加密盘会问密码，普通盘不问
 - ✅ 只读 / 读写 均支持
 - ✅ 密码存 macOS Keychain（不落地明文）
-- ✅ 自动识别哪个分区是 BitLocker 卷（读取卷签名）
+- ✅ 自动识别每个分区的文件系统、以及哪些是加密的（读取磁盘签名）
 - ✅ **多语言界面**（English / 简体中文 / 繁體中文），自动跟随系统语言
 - ✅ 彩色帮助、友好提示、默认只读更安全
 
@@ -78,7 +79,7 @@ bltusb umount          # 用完卸载
 | `bltusb open [ro\|rw]` | 挂载并在 Finder 打开（已挂则直接打开） |
 | `bltusb umount` / `unmount` | 卸载 |
 | `bltusb status` | 查看挂载状态和外接磁盘 |
-| `bltusb detect` | 扫描并识别哪个分区是 BitLocker 卷 |
+| `bltusb detect` | 显示每个外接分区的文件系统（标出加密的） |
 | `bltusb install` | 安装 anylinuxfs |
 | `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | 配置 |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | 切换菜单语言 |
