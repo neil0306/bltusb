@@ -1,0 +1,6 @@
+# 本地配置 / 敏感信息绝不入库
+.config/
+config
+*.local
+*.log
+.DS_Store

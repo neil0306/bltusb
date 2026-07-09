@@ -1,0 +1,408 @@
+#!/usr/bin/env bash
+#
+# bltusb — 在 macOS (Apple Silicon) 上读写 BitLocker 加密 U 盘的便捷工具
+#
+# 底层用开源的 anylinuxfs（不需要 macFUSE / 内核扩展 / 降低系统安全性）。
+# 功能：安装、配置、密码存 Keychain、自动识别 BitLocker 盘、只读/读写挂载、
+#       卸载、状态查看、Finder 打开。
+#
+set -euo pipefail
+
+# ---------------------------------------------------------------------------
+# 常量与配置
+# ---------------------------------------------------------------------------
+VERSION="1.0.0"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bltusb"
+CONFIG_FILE="$CONFIG_DIR/config"
+KEYCHAIN_SERVICE="bltusb-anylinuxfs"
+KEYCHAIN_ACCOUNT="passphrase"
+BITLOCKER_SIGNATURE="-FVE-FS-"   # BitLocker 卷在偏移量 3 处的签名
+
+# 配置项默认值（可被 config 文件覆盖）
+DEVICE=""            # 空 = 每次自动识别
+DEFAULT_MODE="ro"    # 默认只读，更安全
+
+# ---------------------------------------------------------------------------
+# 颜色 / 输出
+# ---------------------------------------------------------------------------
+if [[ -t 1 ]]; then
+  C_RESET=$'\033[0m'; C_BOLD=$'\033[1m'; C_DIM=$'\033[2m'
+  C_RED=$'\033[31m'; C_GRN=$'\033[32m'; C_YEL=$'\033[33m'
+  C_BLU=$'\033[34m'; C_CYN=$'\033[36m'
+else
+  C_RESET=""; C_BOLD=""; C_DIM=""; C_RED=""; C_GRN=""; C_YEL=""; C_BLU=""; C_CYN=""
+fi
+info()  { printf '%s\n' "${C_CYN}▸${C_RESET} $*"; }
+ok()    { printf '%s\n' "${C_GRN}✓${C_RESET} $*"; }
+warn()  { printf '%s\n' "${C_YEL}⚠${C_RESET}  $*" >&2; }
+err()   { printf '%s\n' "${C_RED}✗${C_RESET} $*" >&2; }
+die()   { err "$*"; exit 1; }
+step()  { printf '%s\n' "${C_BOLD}${C_BLU}==>${C_RESET} ${C_BOLD}$*${C_RESET}"; }
+
+# ---------------------------------------------------------------------------
+# 配置读写
+# ---------------------------------------------------------------------------
+load_config() {
+  if [[ -f "$CONFIG_FILE" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONFIG_FILE"
+  fi
+}
+
+save_config() {
+  mkdir -p "$CONFIG_DIR"
+  cat > "$CONFIG_FILE" <<EOF
+# bltusb 配置文件 —— 由 \`bltusb config\` 生成，可手动编辑
+# DEVICE : 目标分区，例如 /dev/disk4s1；留空则每次自动识别 BitLocker 盘
+# DEFAULT_MODE : 默认挂载模式，ro（只读，推荐）或 rw（读写）
+DEVICE="${DEVICE}"
+DEFAULT_MODE="${DEFAULT_MODE}"
+EOF
+  ok "配置已保存到 ${C_DIM}${CONFIG_FILE}${C_RESET}"
+}
+
+# ---------------------------------------------------------------------------
+# 密码（存 macOS Keychain）
+# ---------------------------------------------------------------------------
+keychain_get() {
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null || true
+}
+keychain_set() {
+  security add-generic-password -U -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w "$1" >/dev/null
+}
+keychain_del() {
+  security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+}
+
+# 取密码优先级：环境变量 ALFS_PASSPHRASE > Keychain > 交互输入
+get_passphrase() {
+  if [[ -n "${ALFS_PASSPHRASE:-}" ]]; then
+    printf '%s' "$ALFS_PASSPHRASE"; return 0
+  fi
+  local p; p="$(keychain_get)"
+  if [[ -n "$p" ]]; then
+    printf '%s' "$p"; return 0
+  fi
+  # 交互输入（提示写到 stderr，避免污染 stdout）
+  printf '%s' "${C_CYN}请输入 BitLocker 密码: ${C_RESET}" >&2
+  local pw; read -rs pw; printf '\n' >&2
+  [[ -n "$pw" ]] || die "密码为空，已取消"
+  printf '%s' "$pw"
+}
+
+# ---------------------------------------------------------------------------
+# 依赖检查 / 安装
+# ---------------------------------------------------------------------------
+have_anylinuxfs() { command -v anylinuxfs >/dev/null 2>&1; }
+
+ensure_installed() {
+  have_anylinuxfs && return 0
+  warn "未检测到 anylinuxfs"
+  printf '%s' "现在自动安装吗？[Y/n] " >&2
+  local ans; read -r ans
+  case "${ans:-Y}" in
+    [nN]*) die "已取消。可稍后运行：bltusb install" ;;
+    *) cmd_install ;;
+  esac
+}
+
+cmd_install() {
+  step "安装 anylinuxfs（开源，无需 macFUSE / 内核扩展）"
+  command -v brew >/dev/null 2>&1 || die "未找到 Homebrew，请先安装：https://brew.sh"
+  if have_anylinuxfs; then
+    ok "anylinuxfs 已安装：$(anylinuxfs --version 2>/dev/null || echo 已就绪)"
+    return 0
+  fi
+  info "brew tap nohajc/anylinuxfs"
+  brew tap nohajc/anylinuxfs
+  info "brew trust nohajc/anylinuxfs（官方要求，信任该 tap）"
+  brew trust nohajc/anylinuxfs || warn "trust 失败，如后续安装报 untrusted tap 请手动重试此步"
+  info "brew install anylinuxfs"
+  brew install anylinuxfs
+  have_anylinuxfs && ok "安装完成" || die "安装后仍找不到 anylinuxfs"
+}
+
+# ---------------------------------------------------------------------------
+# 设备识别
+# ---------------------------------------------------------------------------
+# 判断某分区是否为 BitLocker 卷（读偏移 3 处的 -FVE-FS- 签名）。需要 sudo 读裸设备。
+is_bitlocker() {
+  local dev="$1" sig
+  dev="${dev#/dev/}"
+  sig="$(sudo -n dd if="/dev/r${dev}" bs=1 skip=3 count=8 2>/dev/null | tr -d '\0' || true)"
+  [[ "$sig" == "$BITLOCKER_SIGNATURE" ]]
+}
+
+# 列出所有外接物理盘上的分区标识符（diskNsM）
+list_external_partitions() {
+  diskutil list external physical 2>/dev/null \
+    | grep -oE 'disk[0-9]+s[0-9]+' | sort -u
+}
+
+# 自动识别 BitLocker 分区：优先用签名精确判断；识别不到就回退为"唯一的外接分区"
+autodetect_device() {
+  local parts detected=() p
+  parts="$(list_external_partitions)"
+  [[ -n "$parts" ]] || { err "没有发现任何外接磁盘，请插入 U 盘"; return 1; }
+
+  # 尝试用 BitLocker 签名精确识别（可能需要 sudo，非交互失败则跳过）
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    if is_bitlocker "$p" 2>/dev/null; then detected+=("/dev/$p"); fi
+  done <<< "$parts"
+
+  if [[ ${#detected[@]} -eq 1 ]]; then
+    printf '%s' "${detected[0]}"; return 0
+  elif [[ ${#detected[@]} -gt 1 ]]; then
+    err "识别到多个 BitLocker 分区：${detected[*]}"
+    err "请用 'bltusb config' 指定，或挂载时显式传设备：bltusb mount ro /dev/diskXsY"
+    return 1
+  fi
+
+  # 回退：签名判断没结果（多半是没 sudo 权限读裸设备）
+  local arr=(); while IFS= read -r p; do [[ -n "$p" ]] && arr+=("/dev/$p"); done <<< "$parts"
+  if [[ ${#arr[@]} -eq 1 ]]; then
+    warn "未能用签名确认，但只有一个外接分区，采用它：${arr[0]}"
+    printf '%s' "${arr[0]}"; return 0
+  fi
+  err "无法自动确定 BitLocker 分区，候选：${arr[*]:-无}"
+  err "请用 'bltusb config' 设置 DEVICE，或挂载时显式传：bltusb mount ro /dev/diskXsY"
+  return 1
+}
+
+# 解析最终使用的设备：命令行参数 > 配置 DEVICE > 自动识别
+resolve_device() {
+  local arg="${1:-}"
+  if [[ -n "$arg" ]]; then printf '%s' "$arg"; return 0; fi
+  if [[ -n "$DEVICE" ]]; then printf '%s' "$DEVICE"; return 0; fi
+  autodetect_device
+}
+
+# ---------------------------------------------------------------------------
+# 挂载状态
+# ---------------------------------------------------------------------------
+current_mountpoint() {
+  anylinuxfs status 2>/dev/null | grep -oE '/Volumes/[^ ]+' | head -1 || true
+}
+is_mounted() { [[ -n "$(current_mountpoint)" ]]; }
+
+# ---------------------------------------------------------------------------
+# 命令：mount / rw / umount / status / open
+# ---------------------------------------------------------------------------
+cmd_mount() {
+  local mode="$DEFAULT_MODE" dev_arg="" do_open="false" a
+  for a in "$@"; do
+    case "$a" in
+      ro|readonly) mode="ro" ;;
+      rw|readwrite) mode="rw" ;;
+      --open) do_open="true" ;;
+      /dev/*) dev_arg="$a" ;;
+      disk*) dev_arg="/dev/$a" ;;
+      *) warn "忽略未知参数：$a" ;;
+    esac
+  done
+
+  ensure_installed
+
+  if is_mounted; then
+    warn "已经有挂载：$(current_mountpoint)"
+    warn "如需换模式，请先卸载：bltusb umount"
+    return 0
+  fi
+
+  local dev; dev="$(resolve_device "$dev_arg")" || exit 1
+  local pass; pass="$(get_passphrase)"
+
+  local opts=(-w false)
+  [[ "$mode" == "ro" ]] && opts+=(-o ro)
+
+  step "挂载 ${dev}（${mode}）"
+  if [[ "$mode" == "rw" ]]; then
+    warn "读写模式：对文件的改动会直接写回 U 盘，请谨慎操作"
+  fi
+  info "sudo ALFS_PASSPHRASE=*** anylinuxfs mount ${opts[*]} ${dev}"
+
+  if sudo ALFS_PASSPHRASE="$pass" anylinuxfs mount "${opts[@]}" "$dev"; then
+    local mp; mp="$(current_mountpoint)"
+    ok "挂载成功${mp:+：$mp}  ${C_DIM}(${mode})${C_RESET}"
+    [[ -n "$mp" ]] && printf '   %s\n' "${C_DIM}进入目录：cd \"$mp\"${C_RESET}"
+    if [[ "$do_open" == "true" && -n "$mp" ]]; then open "$mp"; fi
+  else
+    err "挂载失败。常见原因：密码错误 / 设备不对 / 盘未插好"
+    err "可先运行 'bltusb detect' 确认设备，或用 'bltusb config' 检查配置"
+    exit 1
+  fi
+}
+
+cmd_rw() { cmd_mount rw "$@"; }
+
+cmd_umount() {
+  if ! is_mounted; then
+    info "当前没有已挂载的卷"
+    return 0
+  fi
+  local mp; mp="$(current_mountpoint)"
+  step "卸载 ${mp}"
+  if sudo anylinuxfs unmount; then
+    ok "已卸载"
+  else
+    err "卸载失败。若提示设备忙，请关闭正在使用该盘的程序/终端后重试"
+    exit 1
+  fi
+}
+
+cmd_status() {
+  ensure_installed
+  step "anylinuxfs 状态"
+  local out; out="$(anylinuxfs status 2>/dev/null || true)"
+  if [[ -n "$out" ]]; then
+    printf '%s\n' "$out"
+    local mp; mp="$(current_mountpoint)"
+    [[ -n "$mp" ]] && ok "已挂载：$mp"
+  else
+    info "当前无挂载"
+  fi
+  echo
+  step "外接磁盘"
+  diskutil list external physical 2>/dev/null || info "无外接磁盘"
+}
+
+cmd_detect() {
+  step "识别 BitLocker 分区（读取签名可能需要 sudo）"
+  local parts p any="false"
+  parts="$(list_external_partitions)"
+  [[ -n "$parts" ]] || { info "没有外接分区"; return 0; }
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    if is_bitlocker "$p" 2>/dev/null; then
+      ok "/dev/$p  ${C_GRN}← 是 BitLocker 卷${C_RESET}"
+      any="true"
+    else
+      printf '   %s\n' "${C_DIM}/dev/$p（非 BitLocker 或无权限读取签名）${C_RESET}"
+    fi
+  done <<< "$parts"
+  [[ "$any" == "true" ]] || warn "没能确认到 BitLocker 卷（可能是权限不足，试试 sudo bltusb detect）"
+}
+
+cmd_open() {
+  if is_mounted; then
+    open "$(current_mountpoint)"; ok "已在 Finder 打开"
+  else
+    cmd_mount --open "$@"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# 命令：config
+# ---------------------------------------------------------------------------
+cmd_config() {
+  local sub="${1:-show}"; shift || true
+  case "$sub" in
+    show|"")
+      step "当前配置"
+      printf '  配置文件 : %s\n' "$CONFIG_FILE"
+      printf '  DEVICE   : %s\n' "${DEVICE:-（自动识别）}"
+      printf '  模式     : %s\n' "$DEFAULT_MODE"
+      if [[ -n "$(keychain_get)" ]]; then
+        printf '  密码     : %s\n' "${C_GRN}已存入 Keychain${C_RESET}"
+      else
+        printf '  密码     : %s\n' "${C_YEL}未设置${C_RESET}"
+      fi
+      ;;
+    set-password|password|passwd)
+      local pw
+      if [[ -n "${1:-}" ]]; then pw="$1"; else
+        printf '%s' "${C_CYN}输入 BitLocker 密码: ${C_RESET}"; read -rs pw; printf '\n'
+      fi
+      [[ -n "$pw" ]] || die "密码为空"
+      keychain_set "$pw"; ok "密码已安全存入 macOS Keychain"
+      ;;
+    set-device|device)
+      local d="${1:-}"
+      [[ -n "$d" ]] || { printf '%s' "输入设备 (如 /dev/disk4s1，留空=自动识别): "; read -r d; }
+      DEVICE="$d"; save_config
+      ;;
+    set-mode|mode)
+      local m="${1:-}"
+      case "$m" in ro|rw) DEFAULT_MODE="$m"; save_config ;; *) die "模式只能是 ro 或 rw" ;; esac
+      ;;
+    clear-password)
+      keychain_del; ok "已从 Keychain 删除密码"
+      ;;
+    init)
+      # 交互式初始化向导
+      step "初始化 bltusb 配置"
+      printf '%s' "BitLocker 密码（回车跳过）: "; local pw; read -rs pw; printf '\n'
+      [[ -n "$pw" ]] && { keychain_set "$pw"; ok "密码已存入 Keychain"; }
+      printf '%s' "固定设备（如 /dev/disk4s1，回车=每次自动识别）: "; read -r DEVICE
+      printf '%s' "默认模式 [ro/rw]（回车=ro）: "; local m; read -r m; [[ "$m" == "rw" ]] && DEFAULT_MODE="rw" || DEFAULT_MODE="ro"
+      save_config
+      ;;
+    *) die "未知 config 子命令：$sub（可用：show / set-password / set-device / set-mode / clear-password / init）" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# 帮助
+# ---------------------------------------------------------------------------
+cmd_help() {
+  cat <<EOF
+${C_BOLD}bltusb${C_RESET} v${VERSION} — 在 macOS 上读写 BitLocker 加密 U 盘
+${C_DIM}底层：anylinuxfs（开源，无需 macFUSE / 内核扩展 / 降低系统安全性）${C_RESET}
+
+${C_BOLD}用法${C_RESET}
+  bltusb <命令> [参数]
+
+${C_BOLD}常用命令${C_RESET}
+  ${C_CYN}mount${C_RESET} [ro|rw] [设备] [--open]   挂载 U 盘（默认${C_BOLD}只读${C_RESET}，更安全）
+  ${C_CYN}rw${C_RESET} [设备] [--open]              读写方式挂载（= mount rw）
+  ${C_CYN}open${C_RESET} [ro|rw]                    挂载并在 Finder 打开（已挂则直接打开）
+  ${C_CYN}umount${C_RESET} / unmount                卸载
+  ${C_CYN}status${C_RESET}                          查看挂载状态和外接磁盘
+  ${C_CYN}detect${C_RESET}                          扫描并识别哪个分区是 BitLocker 卷
+
+${C_BOLD}配置与安装${C_RESET}
+  ${C_CYN}install${C_RESET}                         安装 anylinuxfs（brew tap+trust+install）
+  ${C_CYN}config${C_RESET}                          显示当前配置
+  ${C_CYN}config init${C_RESET}                     交互式初始化（设密码/设备/默认模式）
+  ${C_CYN}config set-password${C_RESET} [密码]      把密码安全存入 macOS Keychain
+  ${C_CYN}config set-device${C_RESET} [/dev/diskXsY] 固定目标设备（留空=自动识别）
+  ${C_CYN}config set-mode${C_RESET} [ro|rw]         设置默认挂载模式
+  ${C_CYN}config clear-password${C_RESET}           从 Keychain 删除密码
+  ${C_CYN}version${C_RESET} / help                  版本 / 本帮助
+
+${C_BOLD}示例${C_RESET}
+  bltusb install                 ${C_DIM}# 首次安装底层工具${C_RESET}
+  bltusb config init             ${C_DIM}# 首次配置（存密码等）${C_RESET}
+  bltusb mount                   ${C_DIM}# 只读挂载（日常推荐）${C_RESET}
+  bltusb rw --open               ${C_DIM}# 读写挂载并打开 Finder${C_RESET}
+  bltusb umount                  ${C_DIM}# 用完卸载${C_RESET}
+  bltusb mount ro /dev/disk4s1   ${C_DIM}# 显式指定设备${C_RESET}
+
+${C_BOLD}密码来源优先级${C_RESET}  环境变量 ALFS_PASSPHRASE ${C_DIM}>${C_RESET} Keychain ${C_DIM}>${C_RESET} 交互输入
+${C_BOLD}说明${C_RESET}  挂载/卸载需要 sudo；默认只读，改文件时才用 rw。
+      设备号（diskN）每次插拔可能变，未固定 DEVICE 时会自动识别 BitLocker 盘。
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# 主入口
+# ---------------------------------------------------------------------------
+main() {
+  load_config
+  local cmd="${1:-help}"; shift || true
+  case "$cmd" in
+    install)            cmd_install "$@" ;;
+    mount|m)            cmd_mount "$@" ;;
+    rw)                 cmd_rw "$@" ;;
+    open)               cmd_open "$@" ;;
+    umount|unmount|u)   cmd_umount "$@" ;;
+    status|st)          cmd_status "$@" ;;
+    detect)             cmd_detect "$@" ;;
+    config|cfg)         cmd_config "$@" ;;
+    version|-v|--version) printf 'bltusb %s\n' "$VERSION" ;;
+    help|-h|--help|"")  cmd_help ;;
+    *) err "未知命令：$cmd"; echo; cmd_help; exit 1 ;;
+  esac
+}
+main "$@"
