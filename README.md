@@ -126,6 +126,8 @@ test/bltusb_test.sh all
 - **smoke** — version, trilingual help, language switching, argument handling. No drive needed; runs on Linux/macOS and in CI.
 - **hardware** — end-to-end against a real drive: detect → read-only/read-write mount → read-back → md5 integrity → read/write speed → cleanup. It is **non-destructive** (only touches `bltusb_selftest_*` files) and **auto-skips** when there's no BitLocker drive, no password, or the host isn't macOS — so `test/bltusb_test.sh all` stays green even without the USB.
 
+Cutting a release is one command (`scripts/release.sh patch`) — see [`docs/RELEASING.md`](docs/RELEASING.md).
+
 ## Requirements
 
 - macOS (Apple Silicon)
