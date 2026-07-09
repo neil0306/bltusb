@@ -13,7 +13,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Constants & config
 # ---------------------------------------------------------------------------
-VERSION="1.2.0"
+VERSION="1.2.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bltusb"
 CONFIG_FILE="$CONFIG_DIR/config"
 KEYCHAIN_SERVICE="bltusb-anylinuxfs"
@@ -272,7 +272,10 @@ cmd_install() {
 is_bitlocker() {
   local dev="$1" sig
   dev="${dev#/dev/}"
-  sig="$(sudo -n dd if="/dev/r${dev}" bs=1 skip=3 count=8 2>/dev/null | tr -d '\0' || true)"
+  # Raw char devices require sector-aligned reads, so read one 512B sector and
+  # then slice bytes 3..10 (a bare `dd bs=1 skip=3` on /dev/rdiskN fails with
+  # "Invalid argument").
+  sig="$(sudo -n dd if="/dev/r${dev}" bs=512 count=1 2>/dev/null | dd bs=1 skip=3 count=8 2>/dev/null | tr -d '\0' || true)"
   [[ "$sig" == "$BITLOCKER_SIGNATURE" ]]
 }
 
