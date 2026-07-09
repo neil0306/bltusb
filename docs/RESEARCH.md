@@ -1,60 +1,64 @@
-# 方案调研：在 macOS (Apple Silicon) 上读写 BitLocker U 盘
+<div align="right">
+  <b>English</b> | <a href="RESEARCH.zh-CN.md">简体中文</a>
+</div>
 
-本文件记录了做这个工具之前的调研与实测结论，解释为什么最终选择 **anylinuxfs**。
+# Research: reading/writing BitLocker USB drives on macOS (Apple Silicon)
 
-## 背景约束
+This document records the research and hands-on testing done before building this tool, and explains why **anylinuxfs** was ultimately chosen.
 
-- 机器是 Apple Silicon（arm64）macOS。
-- 目标：在 Mac 上**读写**（不只是读）BitLocker To Go 加密 U 盘。
-- BitLocker 盘是「两层」结构：外层 BitLocker 加密 + 内层 NTFS 文件系统。
-- 硬约束：现代 macOS（Ventura 13+）**移除了原生 NTFS 写支持**，NTFS 写入必须靠 FUSE（ntfs-3g）。
+## Constraints
 
-## 候选方案对比
+- The machine is Apple Silicon (arm64) macOS.
+- Goal: **read and write** (not just read) a BitLocker To Go encrypted USB drive on the Mac.
+- A BitLocker drive is "two layers": an outer BitLocker encryption + an inner NTFS filesystem.
+- Hard constraint: modern macOS (Ventura 13+) **removed native NTFS write support**, so writing NTFS must go through FUSE (ntfs-3g).
 
-| 方案 | 能读 | 能写 | Apple Silicon | 需内核扩展/降安全性 | 免费开源 |
+## Approach comparison
+
+| Approach | Read | Write | Apple Silicon | Needs kext / reduced security | Free & open source |
 |---|---|---|---|---|---|
-| **anylinuxfs**（本工具采用） | ✅ | ✅ | ✅ | ❌ 不需要 | ✅ |
-| dislocker + macFUSE + ntfs-3g | ✅ | ✅ | ✅ | ⚠️ 需装 macFUSE kext、进恢复模式降到 Reduced Security + 重启 | ✅ |
-| dislocker + FUSE-T + ntfs-3g | 可能 | ❓ 无实测成功案例 | ✅（无 kext） | ❌ | ✅ |
-| dislocker-file 离线解密 + 原生只读挂载 | ✅ | ❌ 只读 | ✅ | ❌（零安装） | ✅ |
-| libbde / bdetools | ✅ | ❌ 只读（取证用途） | ✅ | 视 FUSE 后端 | ✅ |
-| VeraCrypt | ❌ 不支持 BitLocker 格式 | ❌ | — | — | ✅ |
-| 商业 GUI（iBoysoft 等） | ✅ | ✅ | ✅ | 多数仍需 system extension | ❌ 收费 |
+| **anylinuxfs** (used by this tool) | ✅ | ✅ | ✅ | ❌ No | ✅ |
+| dislocker + macFUSE + ntfs-3g | ✅ | ✅ | ✅ | ⚠️ Requires macFUSE kext: Recovery → Reduced Security + reboot | ✅ |
+| dislocker + FUSE-T + ntfs-3g | Maybe | ❓ No confirmed success reports | ✅ (no kext) | ❌ | ✅ |
+| dislocker-file offline decrypt + native read-only mount | ✅ | ❌ Read-only | ✅ | ❌ (zero install) | ✅ |
+| libbde / bdetools | ✅ | ❌ Read-only (forensics) | ✅ | Depends on FUSE backend | ✅ |
+| VeraCrypt | ❌ Does not support BitLocker format | ❌ | — | — | ✅ |
+| Commercial GUI (iBoysoft, etc.) | ✅ | ✅ | ✅ | Most still need a system extension | ❌ Paid |
 
-## 为什么选 anylinuxfs
+## Why anylinuxfs
 
-- **零内核扩展**：不用 macFUSE，因此不必进恢复模式、不必降低系统安全性、不必重启，也没有 GUI 批准弹窗。
-- **能读也能写**：VM 内用 Linux 原生驱动，读写 BitLocker/NTFS 都稳定。
-- **原生支持 BitLocker**：用密码 / recovery key 即可解密。
-- **一条命令**：安装后 `mount` 即可。
+- **Zero kernel extensions**: no macFUSE, so no Recovery mode, no lowering system security, no reboot, and no GUI approval prompts.
+- **Both read and write**: uses native Linux drivers inside the VM, stable for BitLocker/NTFS read/write.
+- **Native BitLocker support**: decrypts with a password / recovery key.
+- **One command**: after install, just `mount`.
 
-原理：起一个 Alpine Linux microVM → VM 里解密 BitLocker + 挂载 NTFS → 通过 NFS 把卷回传给 macOS（在 `mount` 里显示为 nfs）。
+How it works: it spins up an Alpine Linux microVM → decrypts BitLocker + mounts NTFS inside the VM → re-exports the volume back to macOS over NFS (shows up as `nfs` in `mount`).
 
-## 实测结论（Apple Silicon）
+## Hands-on results (Apple Silicon)
 
-- 安装：`brew tap nohajc/anylinuxfs && brew trust nohajc/anylinuxfs && brew install anylinuxfs`
-  - `brew trust` 这步不能省，否则报 “Refusing to load formula from untrusted tap”。
-- 密码可**非交互**传入：环境变量 `ALFS_PASSPHRASE`（比 README 更准，从 `anylinuxfs mount --help` 挖到）。
-- 只读挂载：`sudo ALFS_PASSPHRASE=*** anylinuxfs mount -o ro -w false /dev/diskXsY`
-- 读写挂载：去掉 `-o ro`。
-- 卸载：`sudo anylinuxfs unmount`
-- 设备用**分区**（`/dev/diskXsY`），不是整盘。
-- 挂载/卸载需要 `sudo`。
-- 只读、读写、最小写测试（写→读回→删）均实测通过，原有数据不受影响。
+- Install: `brew tap nohajc/anylinuxfs && brew trust nohajc/anylinuxfs && brew install anylinuxfs`
+  - The `brew trust` step is mandatory, otherwise you get "Refusing to load formula from untrusted tap".
+- The password can be passed **non-interactively** via the `ALFS_PASSPHRASE` environment variable (more accurate than the README; discovered from `anylinuxfs mount --help`).
+- Read-only mount: `sudo ALFS_PASSPHRASE=*** anylinuxfs mount -o ro -w false /dev/diskXsY`
+- Read-write mount: drop `-o ro`.
+- Unmount: `sudo anylinuxfs unmount`
+- Use the **partition** (`/dev/diskXsY`), not the whole disk.
+- Mount/unmount require `sudo`.
+- Read-only, read-write, and a minimal write test (write → read back → delete) all passed, with existing data untouched.
 
-## 被排除的方案要点
+## Why the other approaches were ruled out
 
-- **原生 NTFS 写 / fstab 偏方**：Ventura 起 Apple 删了 `ntfs.kext`，已彻底失效，且历史上会损坏数据，别用。
-- **libbde / VeraCrypt**：前者只读（取证），后者根本不支持 BitLocker 格式。
-- **dislocker + macFUSE**：能读写，但 Apple Silicon 上要装内核扩展、降安全性、重启，明显更折腾。
-- **dislocker + FUSE-T**：理论可行且无 kext，但全网无可靠实测成功记录，且 Homebrew formula 硬编码 macfuse 需打补丁。
-- **只读救数据**：`dislocker-file` 离线解密成镜像 + `hdiutil attach` + 原生只读挂，零安装、最安全，但不能写、需等量磁盘空间。
+- **Native NTFS write / the fstab trick**: Apple removed `ntfs.kext` starting in Ventura, so it is fully broken now, and historically it could corrupt filesystems — don't use it.
+- **libbde / VeraCrypt**: the former is read-only (forensics), the latter doesn't support the BitLocker format at all.
+- **dislocker + macFUSE**: works for read/write, but on Apple Silicon it requires installing a kernel extension, lowering security, and rebooting — clearly more hassle.
+- **dislocker + FUSE-T**: theoretically viable and kext-free, but there are no reliable success reports anywhere, and the Homebrew formula hardcodes macfuse and would need patching.
+- **Read-only data rescue**: `dislocker-file` offline-decrypts to an image + `hdiutil attach` + native read-only mount — zero install, safest, but can't write and needs disk space equal to the volume size.
 
-## 参考
+## References
 
 - anylinuxfs — https://github.com/nohajc/anylinuxfs
-- 教程（BitLocker on Mac via anylinuxfs）— https://nohajc.github.io/blog/tutorial/2025/07/20/how-to-mount-bit-locker-drives-on-mac.html
+- Tutorial (BitLocker on Mac via anylinuxfs) — https://nohajc.github.io/blog/tutorial/2025/07/20/how-to-mount-bit-locker-drives-on-mac.html
 - dislocker — https://github.com/Aorimn/dislocker
-- macFUSE FUSE Backends（FSKit vs kernel）— https://github.com/macfuse/macfuse/wiki/FUSE-Backends
+- macFUSE FUSE Backends (FSKit vs kernel) — https://github.com/macfuse/macfuse/wiki/FUSE-Backends
 - FUSE-T — https://github.com/macos-fuse-t/fuse-t
 - libbde — https://github.com/libyal/libbde

@@ -1,79 +1,83 @@
+<div align="right">
+  <b>English</b> | <a href="README.zh-CN.md">简体中文</a>
+</div>
+
 # bltusb
 
-在 **macOS (Apple Silicon)** 上读写 **BitLocker** 加密 U 盘的命令行工具。
+A command-line tool to **read and write BitLocker-encrypted USB drives on macOS (Apple Silicon)**.
 
-底层基于开源的 [anylinuxfs](https://github.com/nohajc/anylinuxfs)，**不需要 macFUSE、不需要内核扩展、不需要降低系统安全性、不需要重启**。它在后台跑一个极小的 Alpine Linux microVM，在 VM 里用 Linux 原生驱动解密 BitLocker 并读写 NTFS，再通过 NFS 把卷挂回 macOS。
+Built on top of the open-source [anylinuxfs](https://github.com/nohajc/anylinuxfs): **no macFUSE, no kernel extension, no reduced system security, no reboot**. It runs a tiny Alpine Linux microVM that decrypts BitLocker and reads/writes NTFS using native Linux drivers, then mounts the volume back to macOS over NFS.
 
-- ✅ 只读 / 读写 均支持
-- ✅ 密码存 macOS Keychain（不落地明文）
-- ✅ 自动识别哪个分区是 BitLocker 卷（读取卷签名）
-- ✅ 彩色帮助、友好提示、默认只读更安全
+- ✅ Read-only **and** read-write
+- ✅ Password stored in the macOS Keychain (never written to disk in plaintext)
+- ✅ Auto-detects which partition is the BitLocker volume (reads the volume signature)
+- ✅ Colored help, friendly prompts, read-only by default for safety
 
-> 为什么不用经典的 `dislocker + macFUSE + ntfs-3g`？在 Apple Silicon 上那套要装 macFUSE 内核扩展，必须进恢复模式把安全等级降到 “Reduced Security” 并重启。anylinuxfs 完全绕开了这些。对比见 [`docs/RESEARCH.md`](docs/RESEARCH.md)。
+> Why not the classic `dislocker + macFUSE + ntfs-3g`? On Apple Silicon that stack requires installing the macFUSE kernel extension, which means booting into Recovery, lowering the security policy to "Reduced Security", and rebooting. anylinuxfs avoids all of that. See [`docs/RESEARCH.md`](docs/RESEARCH.md) for the full comparison.
 
-## 安装
+## Install
 
 ```bash
-# 1) 放到 PATH 里（Homebrew 的 bin 已在 PATH）
+# 1) Drop it on your PATH (Homebrew's bin is already on PATH)
 curl -fsSL https://raw.githubusercontent.com/neil0306/bltusb/main/bltusb -o /opt/homebrew/bin/bltusb
 chmod +x /opt/homebrew/bin/bltusb
 
-# 或者 clone 后自行放置
+# or clone and place it yourself
 git clone https://github.com/neil0306/bltusb.git
 install -m 0755 bltusb/bltusb /opt/homebrew/bin/bltusb
 
-# 2) 安装底层的 anylinuxfs（brew tap + trust + install）
+# 2) Install the underlying anylinuxfs (brew tap + trust + install)
 bltusb install
 ```
 
-## 快速开始
+## Quick start
 
 ```bash
-bltusb config init     # 交互式设置：BitLocker 密码（存 Keychain）、可选固定设备、默认模式
-bltusb mount           # 只读挂载（日常推荐）
-bltusb rw --open       # 读写挂载并在 Finder 打开
-bltusb umount          # 用完卸载
+bltusb config init     # Interactive setup: BitLocker password (→ Keychain), optional fixed device, default mode
+bltusb mount           # Mount read-only (recommended for daily use)
+bltusb rw --open       # Mount read-write and open in Finder
+bltusb umount          # Unmount when done
 ```
 
-## 命令一览
+## Commands
 
-| 命令 | 说明 |
+| Command | Description |
 |---|---|
-| `bltusb mount [ro\|rw] [设备] [--open]` | 挂载（默认**只读**） |
-| `bltusb rw [设备] [--open]` | 读写挂载（= `mount rw`） |
-| `bltusb open [ro\|rw]` | 挂载并在 Finder 打开（已挂则直接打开） |
-| `bltusb umount` / `unmount` | 卸载 |
-| `bltusb status` | 查看挂载状态和外接磁盘 |
-| `bltusb detect` | 扫描并识别哪个分区是 BitLocker 卷 |
-| `bltusb install` | 安装 anylinuxfs |
-| `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | 配置 |
-| `bltusb help` / `version` | 帮助 / 版本 |
+| `bltusb mount [ro\|rw] [device] [--open]` | Mount (**read-only** by default) |
+| `bltusb rw [device] [--open]` | Mount read-write (= `mount rw`) |
+| `bltusb open [ro\|rw]` | Mount and open in Finder (or just open if already mounted) |
+| `bltusb umount` / `unmount` | Unmount |
+| `bltusb status` | Show mount status and external disks |
+| `bltusb detect` | Scan and identify which partition is a BitLocker volume |
+| `bltusb install` | Install anylinuxfs |
+| `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | Configuration |
+| `bltusb help` / `version` | Help / version |
 
-## 密码来源优先级
+## Password resolution order
 
 ```
-环境变量 ALFS_PASSPHRASE  >  macOS Keychain  >  交互输入
+env ALFS_PASSPHRASE  >  macOS Keychain  >  interactive prompt
 ```
 
-密码通过 `bltusb config set-password` 存入 macOS Keychain（服务名 `bltusb-anylinuxfs`），**不会**写进任何配置文件或仓库。也可临时用环境变量：
+The password is stored in the macOS Keychain (service name `bltusb-anylinuxfs`) via `bltusb config set-password`. It is **never** written to any config file or committed to the repo. You can also pass it ad hoc via an environment variable:
 
 ```bash
-ALFS_PASSPHRASE='你的密码' bltusb mount
+ALFS_PASSPHRASE='your-password' bltusb mount
 ```
 
-## 说明与注意
+## Notes
 
-- 挂载 / 卸载需要 `sudo`。
-- 设备号（`diskN`）每次插拔可能变化；不固定 `DEVICE` 时工具会自动识别 BitLocker 卷。
-- 默认**只读**，改文件时才用 `rw`，降低误操作风险。
-- 配置文件在 `~/.config/bltusb/config`，只存设备号和默认模式，**不含密码**。
+- Mount / unmount require `sudo`.
+- Device numbers (`diskN`) can change on each replug; when `DEVICE` is not pinned, the tool auto-detects the BitLocker volume.
+- **Read-only by default**; use `rw` only when you need to modify files, to reduce the risk of accidents.
+- The config file lives at `~/.config/bltusb/config` and stores only the device and default mode — **never the password**.
 
-## 依赖
+## Requirements
 
-- macOS（Apple Silicon）
+- macOS (Apple Silicon)
 - [Homebrew](https://brew.sh)
-- [anylinuxfs](https://github.com/nohajc/anylinuxfs)（由 `bltusb install` 自动安装）
+- [anylinuxfs](https://github.com/nohajc/anylinuxfs) (installed automatically by `bltusb install`)
 
 ## License
 
-MIT — 见 [LICENSE](LICENSE)。
+MIT — see [LICENSE](LICENSE).
