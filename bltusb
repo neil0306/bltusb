@@ -137,6 +137,7 @@ t() {
     cfg.pwsaved)      en="Password securely stored in the macOS Keychain"; zh_cn="密码已安全存入 macOS Keychain"; zh_tw="密碼已安全存入 macOS Keychain" ;;
     cfg.devprompt)    en="Enter device (e.g. /dev/disk4s1, empty = auto-detect): "; zh_cn="输入设备 (如 /dev/disk4s1，留空=自动识别): "; zh_tw="輸入裝置 (如 /dev/disk4s1，留空=自動辨識): " ;;
     cfg.modeerr)      en="Mode must be ro or rw"; zh_cn="模式只能是 ro 或 rw"; zh_tw="模式只能是 ro 或 rw" ;;
+    cfg.deverr)       en="Device must look like /dev/diskXsY (or empty)"; zh_cn="设备必须形如 /dev/diskXsY（或留空）"; zh_tw="裝置必須形如 /dev/diskXsY（或留空）" ;;
     cfg.pwcleared)    en="Password removed from the Keychain"; zh_cn="已从 Keychain 删除密码"; zh_tw="已從 Keychain 刪除密碼" ;;
     cfg.init.header)  en="Initialize bltusb configuration"; zh_cn="初始化 bltusb 配置"; zh_tw="初始化 bltusb 設定" ;;
     cfg.init.pw)      en="BitLocker password (Enter to skip): "; zh_cn="BitLocker 密码（回车跳过）: "; zh_tw="BitLocker 密碼（Enter 跳過）: " ;;
@@ -179,11 +180,28 @@ t() {
 # ---------------------------------------------------------------------------
 # Config load/save
 # ---------------------------------------------------------------------------
+# Parse the config WITHOUT `source` so a hand-edited/crafted config can never
+# execute code. Only known keys are honored; values are validated in main().
 load_config() {
-  if [[ -f "$CONFIG_FILE" ]]; then
-    # shellcheck disable=SC1090
-    source "$CONFIG_FILE"
-  fi
+  [[ -f "$CONFIG_FILE" ]] || return 0
+  local line key val
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    case "$line" in ''|\#*) continue ;; esac
+    key="${line%%=*}"; val="${line#*=}"
+    val="${val%\"}"; val="${val#\"}"   # strip one layer of surrounding quotes
+    case "$key" in
+      DEVICE)        DEVICE="$val" ;;
+      DEFAULT_MODE)  DEFAULT_MODE="$val" ;;
+      LANG_OVERRIDE) LANG_OVERRIDE="$val" ;;
+    esac
+  done < "$CONFIG_FILE"
+}
+
+# Reject anything untrusted read from the config file (fail closed).
+validate_config() {
+  case "$DEFAULT_MODE" in ro|rw) ;; *) DEFAULT_MODE="ro" ;; esac
+  case "$LANG_OVERRIDE" in ""|en|zh-CN|zh-TW) ;; *) LANG_OVERRIDE="" ;; esac
+  [[ -z "$DEVICE" || "$DEVICE" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || DEVICE=""
 }
 
 save_config() {
@@ -354,13 +372,16 @@ perform_mount() {
   local dev="$1" mode="$2" do_open="${3:-false}"
   local pass; pass="$(get_passphrase)"
   local opts=(-w false)
-  [[ "$mode" == "ro" ]] && opts+=(-o ro)
+  # Fail closed: only an explicit "rw" gets read-write; anything else is read-only.
+  [[ "$mode" == "rw" ]] || opts+=(-o ro)
 
   step "$(t mnt.mounting "$dev" "$mode")"
   [[ "$mode" == "rw" ]] && warn "$(t mnt.rwwarn)"
-  info "sudo ALFS_PASSPHRASE=*** anylinuxfs mount ${opts[*]} ${dev}"
+  info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
 
-  if sudo ALFS_PASSPHRASE="$pass" anylinuxfs mount "${opts[@]}" "$dev"; then
+  # Pass the passphrase via the environment (not as a sudo argv), so it never
+  # appears in `ps`. --preserve-env keeps it across sudo's env reset.
+  if ALFS_PASSPHRASE="$pass" sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "${opts[@]}" "$dev"; then
     local mp; mp="$(current_mountpoint)"
     ok "$(t mnt.success "${mp:+ → $mp}")  ${C_DIM}(${mode})${C_RESET}"
     [[ -n "$mp" ]] && printf '   %s\n' "${C_DIM}$(t mnt.cd "$mp")${C_RESET}"
@@ -560,6 +581,7 @@ cmd_config() {
     set-device|device)
       local d="${1:-}"
       [[ -n "$d" ]] || { printf '%s' "$(t cfg.devprompt)"; read -r d; }
+      if [[ -n "$d" && ! "$d" =~ ^/dev/disk[0-9]+s[0-9]+$ ]]; then die "$(t cfg.deverr)"; fi
       DEVICE="$d"; save_config
       ;;
     set-mode|mode)
@@ -726,6 +748,7 @@ cmd_help() {
 # ---------------------------------------------------------------------------
 main() {
   load_config
+  validate_config
   BLTUSB_LANG_CODE="$(resolve_lang)"
   local cmd="${1:-}"; shift || true
   case "$cmd" in

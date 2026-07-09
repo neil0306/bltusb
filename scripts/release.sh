@@ -46,6 +46,9 @@ command -v shellcheck >/dev/null 2>&1 || die "shellcheck not found"
 if [[ $DRY_RUN -eq 0 ]] && [[ -n "$(git status --porcelain)" ]]; then
   die "git tree is not clean — commit or stash first"
 fi
+if [[ $DRY_RUN -eq 0 && -d "$TAP_DIR/.git" ]] && [[ -n "$(git -C "$TAP_DIR" status --porcelain)" ]]; then
+  die "tap repo ($TAP_DIR) is not clean — commit or stash first"
+fi
 
 CUR="$(grep -m1 '^VERSION=' bltusb | sed -E 's/.*"(.*)".*/\1/')"
 [[ "$CUR" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "cannot parse current VERSION ($CUR)"

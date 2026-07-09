@@ -89,7 +89,7 @@ hardware() {
   if ! command -v anylinuxfs >/dev/null 2>&1; then skip "anylinuxfs not installed"; return; fi
 
   local dev
-  dev="$("$BIN" detect 2>/dev/null | grep 'BitLocker volume' | grep -oE '/dev/disk[0-9]+s[0-9]+' | head -1)"
+  dev="$(BLTUSB_LANG=en "$BIN" detect 2>/dev/null | grep 'BitLocker volume' | grep -oE '/dev/disk[0-9]+s[0-9]+' | head -1)"
   if [[ -z "$dev" ]]; then skip "no BitLocker drive detected — plug one in to run this suite"; return; fi
   ok "BitLocker drive detected: $dev"
 
@@ -103,7 +103,8 @@ hardware() {
   local M f; wait_mount; M="$(mp)"
   if [[ -n "$M" ]]; then
     ok "read-only mounted: $M"
-    if touch "$M/bltusb_selftest_probe" 2>/dev/null; then no "read-only was writable"; rm -f "$M/bltusb_selftest_probe"; else ok "read-only rejects writes"; fi
+    local probe="$M/bltusb_selftest_ro_$$"
+    if touch "$probe" 2>/dev/null; then no "read-only was writable"; rm -f "$probe"; else ok "read-only rejects writes"; fi
     f="$(find "$M" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | head -1)"
     if [[ -n "$f" ]]; then
       if md5 -q "$f" >/dev/null 2>&1; then ok "read existing file: $(basename "$f")"; else no "could not read existing file"; fi
