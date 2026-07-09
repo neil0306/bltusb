@@ -24,17 +24,19 @@ Built on top of the open-source [anylinuxfs](https://github.com/nohajc/anylinuxf
 
 ## Install
 
+### Homebrew (recommended)
+
 ```bash
-# 1) Drop it on your PATH (Homebrew's bin is already on PATH)
+brew install neil0306/tap/bltusb
+bltusb install   # one-time: set up the anylinuxfs backend
+```
+
+### Manual
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/neil0306/bltusb/main/bltusb -o /opt/homebrew/bin/bltusb
 chmod +x /opt/homebrew/bin/bltusb
-
-# or clone and place it yourself
-git clone https://github.com/neil0306/bltusb.git
-install -m 0755 bltusb/bltusb /opt/homebrew/bin/bltusb
-
-# 2) Install the underlying anylinuxfs (brew tap + trust + install)
-bltusb install
+bltusb install   # one-time: set up the anylinuxfs backend
 ```
 
 ## Quick start

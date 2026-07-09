@@ -24,17 +24,19 @@
 
 ## 安装
 
+### Homebrew（推荐）
+
 ```bash
-# 1) 放到 PATH 里（Homebrew 的 bin 已在 PATH）
+brew install neil0306/tap/bltusb
+bltusb install   # 一次性：装好底层 anylinuxfs
+```
+
+### 手动
+
+```bash
 curl -fsSL https://raw.githubusercontent.com/neil0306/bltusb/main/bltusb -o /opt/homebrew/bin/bltusb
 chmod +x /opt/homebrew/bin/bltusb
-
-# 或者 clone 后自行放置
-git clone https://github.com/neil0306/bltusb.git
-install -m 0755 bltusb/bltusb /opt/homebrew/bin/bltusb
-
-# 2) 安装底层的 anylinuxfs（brew tap + trust + install）
-bltusb install
+bltusb install   # 一次性：装好底层 anylinuxfs
 ```
 
 ## 快速开始
