@@ -18,6 +18,8 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${BLTUSB_BIN:-$HERE/../bltusb}"
 PASS=0; FAIL=0; SKIP=0
+KC_SVC="bltusb-anylinuxfs"; KC_ACC="passphrase"
+FRESH_ORIG=""   # captured Keychain password, restored on exit
 
 ok()   { echo "  ✓ $*"; PASS=$((PASS+1)); }
 no()   { echo "  ✗ $*"; FAIL=$((FAIL+1)); }
@@ -31,6 +33,10 @@ now() { perl -MTime::HiRes=time -e 'printf "%.3f", time'; }
 mp()  { anylinuxfs status 2>/dev/null | grep -oE '/Volumes/[^ ]+' | head -1; }
 # The NFS mount point can take a beat to become visible after `mount` returns.
 wait_mount() { for _ in 1 2 3 4 5 6; do [[ -n "$(mp)" ]] && return 0; sleep 1; done; return 1; }
+# anylinuxfs needs a moment to fully tear down before the next mount.
+settle() { sleep 2; }
+kc_has() { security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w >/dev/null 2>&1; }
+restore_keychain() { [[ -n "$FRESH_ORIG" ]] && security add-generic-password -U -s "$KC_SVC" -a "$KC_ACC" -w "$FRESH_ORIG" >/dev/null 2>&1; }
 
 # ---------------------------------------------------------------------------
 # smoke — offline, no diskutil/security/sudo, safe in CI (Linux or macOS)
@@ -133,6 +139,52 @@ hardware() {
   "$BIN" umount >/dev/null 2>&1
   if [[ -z "$(mp)" ]]; then ok "unmounted"; else no "still mounted after umount"; fi
   rm -rf "$tmp"
+
+  fresh_device "$dev"
+}
+
+# fresh_device — optional, opt-in: proves an UNSEEN device (empty Keychain)
+# prompts for the password, the save offer works, and once saved it stops
+# prompting. Manipulates the real Keychain, so it is off by default; enable
+# with BLTUSB_TEST_FRESH=1. Captures & restores the original password.
+fresh_device() {
+  local dev="$1" out
+  hdr "hardware: fresh-device password prompt (opt-in)"
+  if [[ "${BLTUSB_TEST_FRESH:-}" != "1" ]]; then
+    skip "set BLTUSB_TEST_FRESH=1 to run (clears+restores the Keychain password)"; return
+  fi
+  FRESH_ORIG="$(security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w 2>/dev/null || true)"
+  [[ -z "$FRESH_ORIG" && -n "${ALFS_PASSPHRASE:-}" ]] && FRESH_ORIG="$ALFS_PASSPHRASE"
+  if [[ -z "$FRESH_ORIG" ]]; then skip "no known password to feed and restore"; return; fi
+  trap restore_keychain EXIT
+  unset ALFS_PASSPHRASE
+
+  security delete-generic-password -s "$KC_SVC" -a "$KC_ACC" >/dev/null 2>&1
+  if kc_has; then no "keychain not cleared"; else ok "keychain cleared (unseen-device state)"; fi
+  settle   # let the previous suite's unmount fully tear down before remounting
+
+  # 1) prompt appears; decline saving
+  out="$(printf '%s\nn\n' "$FRESH_ORIG" | BLTUSB_LANG=en "$BIN" mount ro "$dev" 2>&1)"
+  case "$out" in *"BitLocker password"*) ok "password prompt shown for unseen device" ;; *) no "no password prompt" ;; esac
+  wait_mount
+  if [[ -n "$(mp)" ]]; then ok "mounted with typed password"; else no "mount with typed password failed"; fi
+  if kc_has; then no "declined save but password was stored"; else ok "declined → not saved"; fi
+  "$BIN" umount >/dev/null 2>&1; settle
+
+  # 2) accept saving
+  printf '%s\ny\n' "$FRESH_ORIG" | BLTUSB_LANG=en "$BIN" mount ro "$dev" >/dev/null 2>&1
+  wait_mount; "$BIN" umount >/dev/null 2>&1; settle
+  if kc_has; then ok "accepted → password saved to Keychain"; else no "accepted but not saved"; fi
+
+  # 3) saved → no more prompt (empty stdin)
+  out="$(printf '' | BLTUSB_LANG=en "$BIN" mount ro "$dev" 2>&1)"
+  case "$out" in *"BitLocker password"*) no "still prompted after save" ;; *) ok "no prompt after save (uses Keychain)" ;; esac
+  wait_mount
+  if [[ -n "$(mp)" ]]; then ok "passwordless mount ok"; else no "passwordless mount failed"; fi
+  "$BIN" umount >/dev/null 2>&1; settle
+
+  restore_keychain; trap - EXIT
+  ok "original Keychain password restored"
 }
 
 # ---------------------------------------------------------------------------

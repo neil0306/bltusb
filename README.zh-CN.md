@@ -124,7 +124,7 @@ test/bltusb_test.sh all
 ```
 
 - **smoke** —— 版本、三语帮助、语言切换、参数处理。不需要 U 盘；Linux/macOS 和 CI 都能跑。
-- **hardware** —— 对真盘端到端：detect → 只读/读写挂载 → 读回 → md5 完整性 → 读写速度 → 清理。**非破坏性**（只碰 `bltusb_selftest_*` 文件），且在没有 BitLocker 盘 / 没有密码 / 非 macOS 时**自动跳过**——所以没插 U 盘时 `test/bltusb_test.sh all` 依然是绿的。
+- **hardware** —— 对真盘端到端：detect → 只读/读写挂载 → 读回 → md5 完整性 → 读写速度 → 清理。**非破坏性**（只碰 `bltusb_selftest_*` 文件），且在没有 BitLocker 盘 / 没有密码 / 非 macOS 时**自动跳过**——所以没插 U 盘时 `test/bltusb_test.sh all` 依然是绿的。另有一个可选子项（`BLTUSB_TEST_FRESH=1`）会额外验证"新设备首次弹密码 + 存 Keychain"流程（会清除并恢复你已存的密码）。
 
 ## 依赖
 

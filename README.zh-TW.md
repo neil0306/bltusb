@@ -124,7 +124,7 @@ test/bltusb_test.sh all
 ```
 
 - **smoke** —— 版本、三語說明、語言切換、參數處理。不需要隨身碟；Linux/macOS 和 CI 都能跑。
-- **hardware** —— 對真磁碟端到端：detect → 唯讀/讀寫掛載 → 讀回 → md5 完整性 → 讀寫速度 → 清理。**非破壞性**（只碰 `bltusb_selftest_*` 檔案），且在沒有 BitLocker 磁碟 / 沒有密碼 / 非 macOS 時**自動跳過**——所以沒插隨身碟時 `test/bltusb_test.sh all` 依然是綠的。
+- **hardware** —— 對真磁碟端到端：detect → 唯讀/讀寫掛載 → 讀回 → md5 完整性 → 讀寫速度 → 清理。**非破壞性**（只碰 `bltusb_selftest_*` 檔案），且在沒有 BitLocker 磁碟 / 沒有密碼 / 非 macOS 時**自動跳過**——所以沒插隨身碟時 `test/bltusb_test.sh all` 依然是綠的。另有一個可選子項（`BLTUSB_TEST_FRESH=1`）會額外驗證「新裝置首次彈密碼 + 存 Keychain」流程（會清除並還原你已存的密碼）。
 
 ## 相依
 
