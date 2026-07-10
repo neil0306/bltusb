@@ -7,3 +7,6 @@ config
 
 # audit workflow scripts (local dev tooling, hardcoded paths)
 .audit/
+
+# Swift build artifacts (Phase-2 helper)
+helper/.build/
