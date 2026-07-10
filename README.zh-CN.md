@@ -81,7 +81,8 @@ bltusb umount          # 用完卸载
 | `bltusb status` | 查看挂载状态和外接磁盘 |
 | `bltusb detect` | 显示每个外接分区的文件系统（标出加密的） |
 | `bltusb install` | 安装 anylinuxfs |
-| `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | 配置 |
+| `bltusb config [init\|set-device\|set-mode]` | 显示/修改配置 |
+| `bltusb forget [/dev/diskXsY\|--all]` | 忘记某块盘记住的密码 |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | 切换菜单语言 |
 | `bltusb help` / `version` | 帮助 / 版本 |
 
@@ -97,16 +98,20 @@ BLTUSB_LANG=en bltusb  # 用环境变量临时切换
 
 优先级：环境变量 `BLTUSB_LANG` → 保存的覆盖设置（`bltusb lang …`）→ 系统语言 → 英文。
 
-## 密码来源优先级
+## 密码（加密盘）
 
-```
-环境变量 ALFS_PASSPHRASE  >  macOS Keychain  >  交互输入
-```
+加密盘（BitLocker/LUKS）挂载时会问密码 —— 或 48 位 BitLocker 恢复密钥。每块盘**各自记忆、默认不记（opt-in）**，就像 Windows 的**"在这台电脑上自动解锁"**：
 
-密码通过 `bltusb config set-password`（或在挂载时接受"存入 Keychain？"提示）存入 macOS Keychain（服务名 `bltusb-anylinuxfs`），**不会**写进任何配置文件或仓库。也可临时用环境变量：
+- 解锁成功后会问 **"下次在这台 Mac 上自动解锁这块盘吗？[y/N]"** —— 默认**否**。
+- 选**是**，该盘密码就按**它自己的卷标识**（Partition UUID，或含 BitLocker 卷 GUID 的引导扇区指纹）存进 macOS Keychain。多块不同密码的盘互不覆盖。
+- **恢复密钥永不保存**（那是灾难恢复凭证）。
+- 已存密码失效会自动回退到手输 —— 适合每次重新加密的临时搬数据盘。
+- `bltusb forget /dev/diskXsY` 删除某块盘的已存密码；`bltusb forget --all` 全清。
+
+挂载时取密码优先级：`环境变量 ALFS_PASSPHRASE` → 本盘已存密码 → 交互输入。脚本里可临时传（不落地）：
 
 ```bash
-ALFS_PASSPHRASE='你的密码' bltusb mount
+ALFS_PASSPHRASE='你的密码' bltusb mount ro /dev/diskXsY
 ```
 
 ## 说明与注意

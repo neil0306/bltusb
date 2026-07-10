@@ -81,7 +81,8 @@ bltusb umount          # 用完卸載
 | `bltusb status` | 檢視掛載狀態和外接磁碟 |
 | `bltusb detect` | 顯示每個外接分割區的檔案系統（標出加密的） |
 | `bltusb install` | 安裝 anylinuxfs |
-| `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | 設定 |
+| `bltusb config [init\|set-device\|set-mode]` | 顯示/修改設定 |
+| `bltusb forget [/dev/diskXsY\|--all]` | 忘記某塊磁碟記住的密碼 |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | 切換選單語言 |
 | `bltusb help` / `version` | 說明 / 版本 |
 
@@ -97,16 +98,20 @@ BLTUSB_LANG=en bltusb  # 用環境變數臨時切換
 
 優先序：環境變數 `BLTUSB_LANG` → 儲存的覆寫設定（`bltusb lang …`）→ 系統語言 → 英文。
 
-## 密碼來源優先序
+## 密碼（加密碟）
 
-```
-環境變數 ALFS_PASSPHRASE  >  macOS Keychain  >  互動輸入
-```
+加密碟（BitLocker/LUKS）掛載時會問密碼 —— 或 48 位 BitLocker 還原金鑰。每塊磁碟**各自記憶、預設不記（opt-in）**，就像 Windows 的**「在這台電腦上自動解鎖」**：
 
-密碼透過 `bltusb config set-password`（或在掛載時接受「存入 Keychain？」提示）存入 macOS Keychain（服務名稱 `bltusb-anylinuxfs`），**不會**寫進任何設定檔或倉庫。也可臨時用環境變數：
+- 解鎖成功後會問 **「下次在這台 Mac 上自動解鎖這塊磁碟嗎？[y/N]」** —— 預設**否**。
+- 選**是**，該磁碟密碼就按**它自己的磁碟區識別**（Partition UUID，或含 BitLocker 卷 GUID 的開機磁區指紋）存進 macOS Keychain。多塊不同密碼的磁碟互不覆寫。
+- **還原金鑰永不儲存**（那是災難還原憑證）。
+- 已存密碼失效會自動回退到手動輸入 —— 適合每次重新加密的臨時搬資料碟。
+- `bltusb forget /dev/diskXsY` 刪除某塊磁碟的已存密碼；`bltusb forget --all` 全清。
+
+掛載時取密碼優先序：`環境變數 ALFS_PASSPHRASE` → 本磁碟已存密碼 → 互動輸入。指令稿裡可臨時傳（不落地）：
 
 ```bash
-ALFS_PASSPHRASE='你的密碼' bltusb mount
+ALFS_PASSPHRASE='你的密碼' bltusb mount ro /dev/diskXsY
 ```
 
 ## 說明與注意

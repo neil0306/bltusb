@@ -81,7 +81,8 @@ bltusb umount          # unmount when done
 | `bltusb status` | Show mount status and external disks |
 | `bltusb detect` | Show each external partition's filesystem (marks encrypted ones) |
 | `bltusb install` | Install anylinuxfs |
-| `bltusb config [init\|set-password\|set-device\|set-mode\|clear-password]` | Configuration |
+| `bltusb config [init\|set-device\|set-mode]` | Show/change configuration |
+| `bltusb forget [/dev/diskXsY\|--all]` | Forget a remembered drive password |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | Switch menu language |
 | `bltusb help` / `version` | Help / version |
 
@@ -97,16 +98,20 @@ BLTUSB_LANG=en bltusb  # one-off override via env var
 
 Resolution order: `BLTUSB_LANG` env var → saved override (`bltusb lang …`) → system locale → English.
 
-## Password resolution order
+## Passwords (encrypted drives)
 
-```
-env ALFS_PASSPHRASE  >  macOS Keychain  >  interactive prompt
-```
+Encrypted drives (BitLocker/LUKS) ask for a password — or a 48-digit BitLocker recovery key — when you mount them. Each drive is **remembered separately** and **opt-in**, exactly like Windows' *"Automatically unlock on this PC"*:
 
-The password is stored in the macOS Keychain (service name `bltusb-anylinuxfs`) via `bltusb config set-password` (or when you accept the "save to Keychain?" prompt). It is **never** written to any config file or committed to the repo. You can also pass it ad hoc:
+- After a successful unlock you're asked **"Automatically unlock this drive on this Mac next time? [y/N]"** — default **No**.
+- Say **yes** and that drive's password is stored in the macOS Keychain **keyed to that specific volume** (its Partition UUID, or a boot-sector fingerprint incl. the BitLocker volume GUID). Multiple drives with different passwords never overwrite each other.
+- **Recovery keys are never saved** (they're disaster-recovery credentials).
+- A wrong/stale saved password automatically falls back to a prompt — handy for transfer drives re-encrypted with a new password.
+- `bltusb forget /dev/diskXsY` removes one drive's saved password; `bltusb forget --all` clears them all.
+
+Resolution order when mounting: `env ALFS_PASSPHRASE` → this drive's saved password → interactive prompt. For scripts you can pass it ad hoc (never stored):
 
 ```bash
-ALFS_PASSPHRASE='your-password' bltusb mount
+ALFS_PASSPHRASE='your-password' bltusb mount ro /dev/diskXsY
 ```
 
 ## Notes
