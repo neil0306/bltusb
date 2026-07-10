@@ -46,10 +46,14 @@ Three‑layer privilege separation. Only the helper is root; everything the user
 ```
 ================= TRUST BOUNDARY (root) =====================
   bltusb-helperd  (signed native daemon, SMAppService, MDM-deployed)
-    · IPC server (XPC or UDS + SO_PEERCRED caller check)
+    · IPC server — XPC: validate connection audit_token + code-signing
+        requirement (TeamIdentifier + designated requirement), NOT UID alone.
+        (UDS alternative: getpeereid/LOCAL_PEERCRED then verify code identity.
+        SO_PEERCRED is Linux — it does not exist on macOS.)
     · request validator (allowlist: external partition only)
     · operation executor -> calls anylinuxfs with FIXED args
-    · audit logger (os_log / BSM)
+    · audit logger (Unified Logging os_log + EndpointSecurity client;
+        NOT OpenBSM/auditd — deprecated on current macOS)
 ============================================================
                          ^  authenticated local IPC
                          |  (password over an fd, never argv/env)
@@ -70,7 +74,7 @@ Three‑layer privilege separation. Only the helper is root; everything the user
 | `mount-external` | `device_id`, `fs_type∈{bitlocker,ntfs,exfat,ext*}`, `mountpoint∈/Volumes/…`, password **via fd** | ro default |
 | `unmount-external` | `mountpoint` | |
 
-**The helper must NEVER:** forward arbitrary anylinuxfs subcommands; invoke `anylinuxfs shell`/exec/format; accept any argument containing `shell`/`exec`/`-c`; touch internal/system disks, EFI, whole disks, or `/dev/rdisk*`; put the password in argv/env/logs/temp; trust the caller's UID claim (verify via `SO_PEERCRED`/audit token); load or `dlopen` any client‑supplied path.
+**The helper must NEVER:** forward arbitrary anylinuxfs subcommands; invoke `anylinuxfs shell`/exec/format; accept any argument containing `shell`/`exec`/`-c`; touch internal/system disks, EFI, whole disks, or `/dev/rdisk*`; put the password in argv/env/logs/temp; trust the caller's UID claim (verify the XPC connection **audit token + code‑signing requirement**, not UID — `SO_PEERCRED` is Linux‑only); load or `dlopen` any client‑supplied path.
 
 **No kernel extension.** anylinuxfs uses a microVM + NFS, not macFUSE — this removes the single largest SRAA scheduling variable (kext approval). The helper does need **Full Disk Access** (raw device), granted non‑interactively via an MDM **PPPC** profile; the agent needs **Automation** TCC for the dialog (also via PPPC). `com.apple.servicemanagement` (TeamIdentifier rule) auto‑approves the background items — **zero user action, zero sudo**.
 
@@ -80,13 +84,15 @@ Three‑layer privilege separation. Only the helper is root; everything the user
 
 | Adversary | Vector | Mitigation |
 |---|---|---|
-| Malicious local user | malformed/oversized IPC; `shell` request; path traversal; forged UID | JSON schema + length cap; op allowlist (no passthrough); regex + `realpath`; `SO_PEERCRED` (ignore client‑claimed UID); per‑uid rate limit |
+| Malicious local user | malformed/oversized IPC; `shell` request; path traversal; forged UID | JSON schema + length cap; op allowlist (no passthrough); regex + `realpath`; verify XPC **audit token + code‑signing requirement** (ignore client‑claimed UID; `SO_PEERCRED` is Linux‑only); per‑uid rate limit |
 | Malicious USB | hostile block data hits NTFS/ext/BitLocker/NFS parsers **as root** | ro default; run anylinuxfs under a Seatbelt profile; prefer `ntfs3` over `ntfs-3g`; **residual: parser‑exploitation risk cannot be fully removed** |
 | Tampered client/agent | replace agent, call helper directly, replay, race insert | helper owns all policy; validates caller; never trusts client‑side checks or UI state |
 | Supply chain | malicious anylinuxfs / Alpine image / dependency binary | signature verify anylinuxfs before exec; pin+verify image digest; root‑owned, non‑user‑writable artifacts (§5) |
 | VM escape / guest→host | libkrun guest shares security context with the VMM | **residual: architectural, not configurable away** (§7) |
 
-Out of scope: `root` acting directly; MDM compromise; physical attack.
+**In scope — physical / peripheral (domain P).** For a removable‑media tool the USB *is* the primary untrusted input, so physical attacks are a dominant vector, not an exclusion. Controls to add (P‑01…P‑07): controlled ports + approved‑media allowlist; hardware **write‑blocker** for intake/forensic reads; accessory inventory + BadUSB/HID and USB‑network‑adapter detection; two‑person action for `rw`/intake; Thunderbolt/USB4 **DMA** posture (Apple Silicon IOMMU mitigates, does not eliminate); DFU/1TR control; power‑state (sleep/cold‑boot key‑residency) and disposal policy.
+
+Out of scope (genuinely): `root` acting directly (already the trusted base); MDM compromise (covered by the platform's own SRAA, not this component).
 
 ---
 
@@ -120,7 +126,7 @@ Guest network: anylinuxfs currently reaches Docker Hub + Alpine CDN on first ini
 6. Read‑only by default; read‑write requires explicit enterprise policy.
 7. Guest has **no outbound network** (offline apk + egress block).
 
-**P1 (strong):** SBOM + CVE process (S4); `ntfs3` not `ntfs-3g` (S5); read‑only rootfs + tmpfs overlay; audit logs to SIEM (os_log/BSM); parser‑risk acceptance memo.
+**P1 (strong):** SBOM + CVE process (S4); `ntfs3` not `ntfs-3g` (S5); read‑only rootfs + tmpfs overlay; audit logs via Unified Logging + EndpointSecurity to SIEM (not OpenBSM — deprecated); parser‑risk acceptance memo.
 
 **Review must cover the whole chain** — anylinuxfs, libkrun, libkrunfw kernel, Alpine rootfs, `gvproxy`, `vmnet-helper` — not just `bltusb`.
 
@@ -183,7 +189,7 @@ Effort delta: a **bash + LaunchDaemon** helper is ~1–2 person‑days but is a 
 | Integrity | Developer ID + notarization + Hardened Runtime; kernel verifies signature pre‑exec; anylinuxfs signature checked before invocation |
 | Data protection | passphrase in memory only, over an fd, zeroed; never on disk/argv/env/logs |
 | Supply chain | pinned + hash‑verified artifacts; SBOM; internal registry; CVE process |
-| Audit & logging | os_log (public metadata, never secrets) + BSM `AUE_MOUNT`; SIEM forward |
+| Audit & logging | Unified Logging os_log (public metadata, never secrets) + an **EndpointSecurity** client (ES_EVENT_TYPE_NOTIFY_MOUNT/UNMOUNT); SIEM forward. **Not** OpenBSM/`AUE_MOUNT` — deprecated on current macOS. Document the local‑root log‑tampering window + encrypted/WORM offline export |
 | Monitoring / IR | alert on unauthorized IPC callers; helper removable/disable via MDM (`launchctl bootout` + profile removal) |
 | Change management | signed pkg re‑distributed via MDM; version in Info.plist; unload‑then‑replace |
 
@@ -193,7 +199,33 @@ Effort delta: a **bash + LaunchDaemon** helper is ~1–2 person‑days but is a 
 
 1. **Do not build the production privileged component yet.** First take §8 to the security team. Their answer determines the entire direction and whether the investment is warranted.
 2. If proceeding: **self‑build the Alpine rootfs (Alt A)** to erase S1–S3 immediately, and design the **signed XPC helper** per §3.
-3. Keep the current bash tool clearly labeled **Phase‑0 / personal‑dev only**; do not present it as an enterprise solution.
+3. Keep the current bash tool clearly labeled **Phase‑0 / personal‑dev only**; do not present it as an enterprise solution. ⚠️ **A label is not an exemption:** "out of scope" holds only if Phase‑0 is **technically and administratively excluded** from government systems and government data (e.g. not installable on the managed fleet, not used on machines that touch classified/PII data). Maintain a signed scope statement. If Phase‑0 ever handles government data, its controls revert to **KEEP** and it is **No‑Go** until remediated.
 4. The optional **auto‑unlock UX** (insert → native dialog) can ship as a **personal‑dev convenience** on machines that already have `sudo`, but it is explicitly **not** the production/SRAA path.
 
 *This document is a synthesis for review. It is not itself an authorization. Figures (effort, CVEs) should be re‑verified at implementation time.*
+
+---
+
+## 13. Audit addendum — offline + macOS SRAA (v1.3.4)
+
+Independent re‑audit of the shipping bash tool against the **`sraa-audit-offline-macos`** rule set (domains **O** offline/air‑gap integrity, **P** peripheral/physical, **M** macOS hardening) by two independent reviewers (Opus subagent + codex, read‑only static, no mount/network/disk). **Verdict unchanged: No‑Go for government production**; every blocking High is architectural/supply‑chain and already tracked in §5–§10. Both reviewers confirmed the bash code is otherwise clean (no new exploitable code‑level bug in the crypto/device‑identity/config paths). The v1.3.4 fixes then went through a **2‑round adversarial re‑audit loop** (codex found 4 regressions round‑1, 2 round‑2 — all fixed and re‑verified — then PASS round‑3), plus a full hardware functional re‑test (19/19: ro/rw/speed/integrity + fresh‑device prompt/save/Keychain‑restore).
+
+**Applied in v1.3.4 (bltusb‑side, no functional loss to the Phase‑0 tool):**
+- **C‑02 (terminal‑escape / bidi injection):** added `sanitize_display()` and applied it to every backend/media‑derived string printed to the terminal (`cmd_status` raw `anylinuxfs status` + `diskutil list`; the wizard's device‑row labels). It strips C0 controls (keeping TAB/NEWLINE), DEL, C1 (U+0080–U+009F), and the true bidi controls (U+061C, U+200E/F, U+202A–E, U+2066–9) — but deliberately **keeps** ZWNJ/ZWJ (U+200C/D, legit in emoji/Arabic/Indic) and U+200B. It decodes each line via `Encode::decode(…, FB_DEFAULT)` so malformed UTF‑8 from hostile media becomes U+FFFD (non‑fatal, no stderr leak) rather than blanking the whole line/row; it is byte‑identical on clean output. Six regression tests in the smoke suite + CI.
+- **O‑01‑b (blind‑trust soft‑fail):** `brew trust nohajc/anylinuxfs` failure is now **fatal** (`die`, was `warn`) — install no longer proceeds with an untrusted tap.
+- **SEC‑01 (doc/behaviour mismatch):** corrected the stale `get_passphrase_quiet()` comment that falsely claimed the legacy global Keychain item is "not consulted." The **migration fallback is retained by design** (upgrading users must keep working); the comment now describes it accurately as a one‑time, per‑drive migration path.
+- **PROC‑01 (test honesty):** relabelled the hardware suite as **DESTRUCTIVE + credential‑mutating** (it writes ~100 MB to the target drive and deletes/restores real Keychain secrets); documented that SKIP is a distinct, visible outcome not counted as a pass.
+
+**Design‑doc corrections made above (were technical errors):**
+- **M‑03:** `SO_PEERCRED` is Linux‑only → macOS must validate the **XPC connection audit token + code‑signing requirement** (or `getpeereid`/`LOCAL_PEERCRED` + code‑identity check on a UDS). Fixed §3/§4.
+- **M‑02:** OpenBSM/`AUE_MOUNT` is deprecated → **Unified Logging + EndpointSecurity**. Fixed §3/§6/§11.
+- **DOC‑01:** physical/peripheral attack is **in scope** (the USB is the primary untrusted input) → added domain‑P controls (P‑01…P‑07) in §4.
+- **P2‑SCOPE‑01:** a "Phase‑0 out of scope" label is not an exemption without technical + administrative exclusion → §12.3.
+
+**Refinements to existing tracking (not new blockers):**
+- **O‑04:** the unverified‑dependency / user‑writable‑rootfs problem **cannot be mitigated inside the bash tool** (anylinuxfs owns those artifacts) — it requires the Phase‑2 self‑built, signed, root‑owned rootfs (Alt‑A). Confirmed, not collapsible into a hash check.
+- **P‑02:** `fstype()`/`_devbytes()` means **bltusb itself** also reads raw boot sectors of untrusted media under `sudo` (narrow surface — `tr -d` + `case` only, fail‑safe `|| true`), in addition to anylinuxfs's parsers. Recorded.
+- **O‑09:** `scripts/release.sh`'s execution host is formally in the **build‑machine** scope and must get its own **networked** `sraa-audit`; it hashes only its own tarball (proves consistency, not independent origin — needs signed tags + independently‑signed manifest).
+- **P2‑O‑01 (air‑gap gate):** anylinuxfs first‑run requires Homebrew + Docker Hub + Alpine network, so the deployment **cannot claim continuous air‑gap**; network/TLS/RA controls stay `N/A‑PENDING‑VERIFICATION` until O‑01 evidence + egress‑blocking + O‑10 diagram exist. Elevated to a gate.
+
+**Deferred to government‑mode / Phase‑2 (intentionally NOT applied to the Phase‑0 personal tool — they remove personal‑convenience features and belong to the signed‑helper phase):** refuse `EUID=0` (M‑01, would break the advertised `sudo bltusb detect` fallback); fail‑closed on unknown filesystem (C‑01); no Finder auto‑open (P‑01); no persistent `rw` / `DEFAULT_MODE=rw` (P‑02); durable structured audit log (H‑01); signed release tags + independent manifest (F‑01).

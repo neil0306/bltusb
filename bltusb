@@ -103,7 +103,7 @@ t() {
     inst.nobrew)      en="Homebrew not found, install it first: https://brew.sh"; zh_cn="未找到 Homebrew，请先安装：https://brew.sh"; zh_tw="找不到 Homebrew，請先安裝：https://brew.sh" ;;
     inst.already)     en="anylinuxfs already installed: %s"; zh_cn="anylinuxfs 已安装：%s"; zh_tw="anylinuxfs 已安裝：%s" ;;
     inst.trustnote)   en="required, trust the tap"; zh_cn="官方要求，信任该 tap"; zh_tw="官方要求，信任該 tap" ;;
-    inst.trustfail)   en="trust failed; if install later reports an untrusted tap, retry this step"; zh_cn="trust 失败，如后续安装报 untrusted tap 请手动重试此步"; zh_tw="trust 失敗，若後續安裝出現 untrusted tap 請手動重試此步" ;;
+    inst.trustfail)   en="Refused: cannot trust tap nohajc/anylinuxfs. Fix the trust step and re-run, or install anylinuxfs from a pre-staged/approved artifact"; zh_cn="已拒绝：无法信任 tap nohajc/anylinuxfs。请修复 trust 步骤后重试，或从预置/已审批的制品安装 anylinuxfs"; zh_tw="已拒絕：無法信任 tap nohajc/anylinuxfs。請修復 trust 步驟後重試，或從預置/已審批的製品安裝 anylinuxfs" ;;
     inst.done)        en="Installed"; zh_cn="安装完成"; zh_tw="安裝完成" ;;
     inst.missing)     en="anylinuxfs still not found after install"; zh_cn="安装后仍找不到 anylinuxfs"; zh_tw="安裝後仍找不到 anylinuxfs" ;;
     det.nodisk)       en="No external disk found, please plug in the USB drive"; zh_cn="没有发现任何外接磁盘，请插入 U 盘"; zh_tw="找不到任何外接磁碟，請插入隨身碟" ;;
@@ -311,14 +311,20 @@ device_key() {
 # pasted un-hyphenated key must be recognized too and never offered for saving.
 is_recovery_key() { [[ "$1" =~ ^[0-9]{6}(-[0-9]{6}){7}$ || "$1" =~ ^[0-9]{48}$ ]]; }
 
-# Non-interactive password for THIS volume only: env ALFS_PASSPHRASE > this
-# drive's own Keychain item. The legacy global item is intentionally NOT
-# consulted here — it belongs to a different (or unknown) drive and auto-trying
-# it against the current volume would violate the per-volume password model
-# (and could silently auto-unlock a different reused-password drive). Never
-# returns another drive's secret. Arg 1 = device key (may be empty).
-# The password is printed to stdout (captured by the caller); any human-facing
-# note goes to stderr so it never contaminates the returned secret.
+# Non-interactive password for THIS volume: env ALFS_PASSPHRASE first, else this
+# drive's OWN per-device Keychain item, else — as a MIGRATION fallback, and only
+# when this drive has no per-device item yet — the legacy single global item (see
+# below). That fallback lets users upgrading from the pre-per-device version keep
+# working. NOTE: a successful mount using the legacy item does NOT auto-write a
+# per-device item — offer_save() runs only on the interactive re-prompt path
+# (perform_mount), never on this quiet path — so the global item stays the source
+# for this drive until the user saves a per-device credential (i.e. only if the
+# stored value later fails, they re-enter, and accept saving). It is NOT a
+# cross-drive secret leak: anylinuxfs is a local decryptor, so a value that
+# doesn't fit the current volume simply falls through to the re-prompt path.
+# Arg 1 = device key (may be empty). The password is printed to stdout (captured
+# by the caller); any human-facing note goes to stderr so it never contaminates
+# the returned secret.
 get_passphrase_quiet() {   # <device_key>
   if [[ -n "${ALFS_PASSPHRASE:-}" ]]; then
     info "${C_DIM}$(t pass.envnote)${C_RESET}" >&2
@@ -328,9 +334,11 @@ get_passphrase_quiet() {   # <device_key>
   [[ -n "$1" ]] && p="$(keychain_get "$1")"
   # Migration fallback: older versions stored ONE global item. Consult it only as
   # a last resort (this drive has no per-device item yet) so existing users keep
-  # working seamlessly after upgrade — first unlock then saves a per-device item.
-  # Not a cross-drive leak: anylinuxfs is a local decryptor, and a value that
-  # doesn't fit this drive simply falls through to the re-prompt path.
+  # working after upgrade. This quiet path does NOT save a per-device item on
+  # success (offer_save runs only on the interactive re-prompt path), so the
+  # global item stays this drive's source until it fails and the user re-enters
+  # and accepts saving. Not a cross-drive leak: anylinuxfs is a local decryptor,
+  # and a value that doesn't fit this drive simply falls through to the re-prompt.
   [[ -z "$p" ]] && p="$(keychain_get "$KEYCHAIN_ACCOUNT")"
   printf '%s' "$p"
 }
@@ -383,7 +391,7 @@ cmd_install() {
   info "brew tap nohajc/anylinuxfs"
   brew tap nohajc/anylinuxfs
   info "brew trust nohajc/anylinuxfs  ${C_DIM}# $(t inst.trustnote)${C_RESET}"
-  brew trust nohajc/anylinuxfs || warn "$(t inst.trustfail)"
+  brew trust nohajc/anylinuxfs || die "$(t inst.trustfail)"
   info "brew install anylinuxfs"
   brew install anylinuxfs
   if have_anylinuxfs; then ok "$(t inst.done)"; else die "$(t inst.missing)"; fi
@@ -436,6 +444,32 @@ looks_windows() {
     *Windows*|*Microsoft*|*NTFS*|*BitLocker*|*FAT*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# Strip terminal-control and bidi-formatting codepoints from any backend/media-
+# derived text (diskutil / anylinuxfs output, volume labels, device names) before
+# it reaches the terminal, so a crafted USB volume label cannot inject ANSI/OSC
+# escape sequences or bidi spoofing (Trojan-Source, CVE-2021-42574) into our
+# output. Removed: C0 controls (keeping TAB/NEWLINE), DEL, C1 controls (U+0080–
+# U+009F), and the true bidi controls U+061C (ALM), U+200E/U+200F (LRM/RLM),
+# U+202A–U+202E (embeddings/overrides), U+2066–U+2069 (isolates). Deliberately
+# NOT removed: U+200C/U+200D (ZWNJ/ZWJ) — legitimate in Arabic/Indic text and in
+# emoji ZWJ sequences (e.g. 👨‍👩) — and U+200B, which is not a bidi/escape vector.
+# UTF-8-safe: each line is decoded to Unicode codepoints with Encode::FB_DEFAULT,
+# which substitutes malformed sequences from hostile media with U+FFFD (never
+# fatal, no warnings) — so multibyte labels (e.g. 备份) survive intact, C1
+# *codepoints* are matched (not UTF-8 continuation bytes), and a single bad byte
+# can never blank a whole line/row. (A plain codepoint-range regex over an
+# undecoded :utf8 stream would empty the line on malformed input — avoided here.)
+# If perl is missing, fall back to a byte-safe C0/DEL strip that never touches
+# bytes >= 0x80, so it cannot mangle UTF-8 (bidi controls survive that fallback,
+# but escape-injection — the primary threat — is still neutralised).
+sanitize_display() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -pe 'BEGIN{binmode STDIN,":raw";binmode STDOUT,":raw";require Encode} $_=Encode::decode("UTF-8",$_,Encode::FB_DEFAULT); s/[\x00-\x08\x0B-\x1F\x7F\x{0080}-\x{009F}\x{061C}\x{200E}\x{200F}\x{202A}-\x{202E}\x{2066}-\x{2069}]//g; $_=Encode::encode("UTF-8",$_)' 2>/dev/null
+  else
+    LC_ALL=C tr -d '\000-\010\013-\037\177'
+  fi
 }
 
 # List partition identifiers (diskNsM) on all external physical disks
@@ -779,7 +813,7 @@ cmd_auto() {
     fs_is_encrypted "$fst" && [[ $rec_enc -eq 0 ]] && rec_enc=$((n+1))
     if fs_is_mountable "$fst" && [[ $rec_any -eq 0 ]]; then rec_any=$((n+1)); fi
     n=$((n+1))
-  done <<< "$(list_partition_rows)"
+  done <<< "$(list_partition_rows | sanitize_display)"   # sanitize: labels reach the terminal at the printf below
 
   [[ $n -gt 0 ]] || { err "$(t wiz.none)"; return 1; }
   if [[ $rec_enc -gt 0 ]]; then rec=$rec_enc; elif [[ $rec_any -gt 0 ]]; then rec=$rec_any; else rec=1; fi
@@ -886,7 +920,7 @@ cmd_umount() {
 cmd_status() {
   ensure_installed
   step "$(t st.header)"
-  local out; out="$(anylinuxfs status 2>/dev/null || true)"
+  local out; out="$(anylinuxfs status 2>/dev/null | sanitize_display || true)"
   if [[ -n "$out" ]]; then
     printf '%s\n' "$out"
     local mp; mp="$(current_mountpoint)"
@@ -896,7 +930,8 @@ cmd_status() {
   fi
   echo
   step "$(t st.extdisks)"
-  diskutil list external physical 2>/dev/null || info "$(t st.noext)"
+  local ext; ext="$(diskutil list external physical 2>/dev/null | sanitize_display || true)"
+  if [[ -n "$ext" ]]; then printf '%s\n' "$ext"; else info "$(t st.noext)"; fi
 }
 
 cmd_detect() {

@@ -7,11 +7,18 @@
 #   test/bltusb_test.sh all        # smoke + hardware
 #
 # The binary under test defaults to ./bltusb next to this repo; override with BLTUSB_BIN.
-# The hardware suite never touches user data — it only creates/removes files
-# prefixed bltusb_selftest_ and needs the BitLocker password in the Keychain
-# or ALFS_PASSPHRASE. It AUTO-SKIPS (not a failure) when there is no macOS,
-# no anylinuxfs, no BitLocker drive, or no password — so `all` stays green on
-# a machine without the USB, and in CI.
+#
+# WARNING — the hardware suite is DESTRUCTIVE and CREDENTIAL-MUTATING:
+#   * it WRITES and deletes real files on the TARGET external drive (a ~100 MB
+#     read/write speed test, files prefixed bltusb_selftest_), and
+#   * it DELETES then restores real macOS Keychain secrets to exercise the
+#     fresh-device / migration prompt paths.
+# Run it ONLY against a dedicated, disposable BitLocker drive whose data you do
+# not care about, with the password in the Keychain or ALFS_PASSPHRASE.
+# Missing prerequisites (no macOS, no anylinuxfs, no external BitLocker drive,
+# no password) are reported as SKIP — a distinct, visible outcome that is NOT
+# counted as a pass (see the pass/fail/skip summary) — so `all` is runnable in
+# CI without the USB while never masking absent security coverage.
 #
 set -uo pipefail
 
@@ -146,10 +153,50 @@ smoke() {
 
   hdr "smoke: version flags"
   assert_contains "-v flag" "bltusb" "$("$BIN" -v 2>/dev/null)"
+
+  hdr "smoke: sanitize_display defangs terminal-escape / bidi injection from media labels"
+  # A crafted USB volume label reaches the terminal via cmd_status / the wizard.
+  # Extract the real sanitize_display() from the script (its body ends at a col-0
+  # '}') and prove it strips control/bidi codepoints while preserving UTF-8. If the
+  # function is ever removed or weakened, these assertions fail in CI.
+  local sanf; sanf="$(mktemp)"
+  # Extract the function body and append a dispatch line so `bash "$sanf"` reads
+  # stdin and writes the sanitized result — no `source`, so no SC1090.
+  sed -n '/^sanitize_display()/,/^}/p' "$BIN" > "$sanf"
+  printf '\nsanitize_display\n' >> "$sanf"
+  if grep -q 'perl -CSAD\|tr -d' "$sanf"; then
+    local esc_out uni_out del_out
+    esc_out="$(printf 'A\033[31m\033]0;pwn\007B' | bash "$sanf")"
+    case "$esc_out" in
+      *$'\033'*|*$'\007'*) no "strips ESC/BEL bytes (got: $(printf %s "$esc_out" | cat -v))" ;;
+      *) ok "strips ESC/BEL bytes" ;;
+    esac
+    uni_out="$(printf '\346\225\260\346\215\256' | bash "$sanf")"   # 数据
+    if [[ "$uni_out" == "数据" ]]; then ok "preserves UTF-8 label (数据)"; else no "UTF-8 label mangled (got: $uni_out)"; fi
+    del_out="$(printf 'x\177y\342\200\256z' | bash "$sanf")"        # DEL + bidi U+202E
+    if [[ "$del_out" == "xyz" ]]; then ok "strips DEL + bidi override"; else no "DEL/bidi not stripped (got: $(printf %s "$del_out" | cat -v))"; fi
+    # ZWJ (U+200D) is legitimate in emoji sequences (👨‍👩) and Arabic/Indic text —
+    # it must survive (regression guard: an earlier range wrongly stripped it).
+    local zwj_in zwj_out; zwj_in="$(printf '\360\237\221\250\342\200\215\360\237\221\251')"  # 👨‍👩
+    zwj_out="$(printf '%s' "$zwj_in" | bash "$sanf")"
+    if [[ "$zwj_out" == "$zwj_in" ]]; then ok "preserves ZWJ emoji sequence (👨‍👩)"; else no "ZWJ emoji corrupted"; fi
+    # Malformed UTF-8 from hostile media must be non-fatal AND must not leak perl
+    # decode warnings to stderr; the valid bytes around it survive.
+    local mal_out mal_err; mal_err="$(mktemp)"
+    mal_out="$(printf 'a\377b' | bash "$sanf" 2>"$mal_err")"
+    if [[ -s "$mal_err" ]]; then no "malformed UTF-8 leaked stderr: $(cat "$mal_err" | head -1)"; else ok "malformed UTF-8 is non-fatal, no stderr leak"; fi
+    case "$mal_out" in a*b) ok "malformed UTF-8 keeps surrounding valid bytes" ;; *) no "malformed UTF-8 dropped valid bytes (got: $(printf %s "$mal_out" | cat -v))" ;; esac
+    rm -f "$mal_err"
+  else
+    no "could not extract sanitize_display from \$BIN"
+  fi
+  rm -f "$sanf"
 }
 
 # ---------------------------------------------------------------------------
-# hardware — real BitLocker USB (macOS only, local). Non-destructive. Auto-skips.
+# hardware — real BitLocker USB (macOS only, local). DESTRUCTIVE + credential-
+# mutating (writes to the target drive, deletes/restores Keychain). Auto-skips
+# when prerequisites are absent. See the WARNING in the file header.
 # ---------------------------------------------------------------------------
 hardware() {
   hdr "hardware: preflight (auto-skips if the environment isn't available)"
