@@ -200,6 +200,13 @@ t() {
     zh-TW) m="$zh_tw" ;;
     *)     m="$zh_cn" ;;
   esac
+  # SC2059 (variable format string) is intentional and safe here: $m is never
+  # attacker-controlled — it is one of the hard-coded en/zh translation literals
+  # selected by $k above. All external/untrusted values (device paths, mount
+  # points, labels) arrive only as "$@" and are consumed strictly through the
+  # translations' %s conversions, so they are substituted as data and never
+  # re-interpreted as a printf format. (current_mountpoint() additionally
+  # whitelists the one path that reaches a %s from `anylinuxfs status`.)
   # shellcheck disable=SC2059
   printf "$m" "$@"
 }
@@ -275,26 +282,27 @@ keychain_del() {   # <account>
 # fingerprint of the boot sector (contains the BitLocker volume GUID; stable
 # across replug, changes only on re-encryption — which is the desired reset).
 device_key() {
-  local dev="$1" uuid tmp n fp
+  local dev="$1" uuid b64 fp
   uuid="$(diskutil info "$dev" 2>/dev/null | awk -F': +' '/Partition UUID/{print $2; exit}')"
   if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"; return 0; fi
-  # No UUID — fall back to a boot-sector fingerprint. Read the raw sector to a
-  # temp file (NOT a shell variable: the sector has NUL bytes, which command
-  # substitution strips) and require EXACTLY 512 bytes before hashing. A cold
-  # `sudo -n` (or a short read) yields zero bytes, whose sha256 is the well-known
-  # empty-string constant (e3b0c442...). Hashing that would mint a non-empty but
-  # bogus, shared key that collides across every drive whose read failed —
-  # breaking per-volume identity and silently no-op'ing `forget`. Emit nothing
-  # (return 1) so callers that test `[[ -n "$key" ]]` correctly treat a failed
-  # read as "no stable identity".
-  tmp="$(mktemp -t bltusb.sector 2>/dev/null)" || return 1
-  sudo -n dd if="/dev/r${dev#/dev/}" bs=512 count=1 of="$tmp" 2>/dev/null || true
-  n="$(wc -c < "$tmp" 2>/dev/null | tr -d ' ')"
-  if [[ "$n" != "512" ]]; then rm -f "$tmp"; return 1; fi
-  fp="$(shasum -a 256 < "$tmp" 2>/dev/null | cut -c1-32)"
-  rm -f "$tmp"
-  [[ -n "$fp" ]] || return 1
-  printf 'fp:%s' "$fp"
+  # No UUID — fall back to a boot-sector fingerprint. Do NOT stage the sector in a
+  # temp file: a `mktemp` path is predictable enough that an attacker can swap it
+  # for a symlink between create and write, redirecting root's `dd of=...` onto an
+  # arbitrary file (classic symlink TOCTOU). Instead carry the sector through a
+  # pipe. The sector contains NUL bytes, which command substitution strips, so
+  # base64-encode it in the pipeline (base64 in a shell variable is NUL-safe) and
+  # require EXACTLY 512 raw bytes — i.e. 684 base64 chars — before hashing. A cold
+  # `sudo -n` (or a short read) yields zero/short output, whose length check fails.
+  # Hashing an empty read would otherwise mint a non-empty but bogus, shared key
+  # that collides across every drive whose read failed — breaking per-volume
+  # identity and silently no-op'ing `forget`. Emit nothing (return 1) so callers
+  # that test `[[ -n "$key" ]]` correctly treat a failed read as "no stable
+  # identity". The hash is over the DECODED 512 raw bytes, so the fingerprint is
+  # byte-identical to a direct `dd | shasum` (and to the test's dev_key()).
+  b64="$(sudo -n dd if="/dev/r${dev#/dev/}" bs=512 count=1 2>/dev/null | base64 2>/dev/null | tr -d '\n')"
+  [[ ${#b64} -eq 684 ]] || return 1
+  fp="$(printf '%s' "$b64" | base64 -d 2>/dev/null | shasum -a 256 | cut -c1-32)"
+  [[ -n "$fp" ]] && printf 'fp:%s' "$fp"
 }
 
 # 48-digit BitLocker recovery key (8 groups of 6 digits)? Accept both the
@@ -631,7 +639,16 @@ resolve_device() {
 # Mount state & core mount
 # ---------------------------------------------------------------------------
 current_mountpoint() {
-  anylinuxfs status 2>/dev/null | grep -oE '/Volumes/[^ ]+' | head -1 || true
+  local mp
+  mp="$(anylinuxfs status 2>/dev/null | grep -oE '/Volumes/[^ ]+' | head -1 || true)"
+  # Defense in depth before it flows into `open`, `anylinuxfs unmount -w`, and cd
+  # hints (all of which already quote it / consume it via %s): require a /Volumes
+  # path and reject CONTROL characters — the real residual risk from a hostile or
+  # garbled volume name is terminal-escape injection, not shell injection. We do
+  # NOT restrict to ASCII: Unicode volume labels (e.g. /Volumes/备份) are valid
+  # and an ASCII-only whitelist would wrongly report such drives as "not mounted".
+  if [[ "$mp" != /Volumes/* || "$mp" == *[[:cntrl:]]* ]]; then mp=""; fi
+  printf '%s' "$mp"
 }
 is_mounted() { [[ -n "$(current_mountpoint)" ]]; }
 

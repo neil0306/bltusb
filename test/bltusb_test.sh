@@ -41,24 +41,23 @@ settle() { sleep 2; }
 kc_has() { security find-generic-password -s "$KC_SVC" -a "$1" -w >/dev/null 2>&1; }
 # Same per-volume key derivation bltusb uses (Partition UUID, else boot-sector fingerprint).
 dev_key() {
-  local d="$1" uuid tmp n fp
+  local d="$1" uuid b64 fp
   uuid="$(diskutil info "$d" 2>/dev/null | awk -F': +' '/Partition UUID/{print $2; exit}')"
   if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"; return 0; fi
-  # No UUID — fall back to a boot-sector fingerprint, mirroring the main
-  # script's device_key() guard. Write the raw sector to a temp file and require
-  # EXACTLY 512 bytes before hashing. A cold `sudo -n` or a short read yields
-  # zero bytes, whose sha256 is the empty-string constant (e3b0c442...); hashing
-  # that would mint a bogus, shared key and restore_keychain would then write the
-  # user's real password under the wrong account. Emit nothing (return 1) on a
-  # short read so callers treat it as "no stable identity".
-  tmp="$(mktemp -t bltusb.testsector 2>/dev/null)" || return 1
-  sudo -n dd if="/dev/r${d#/dev/}" bs=512 count=1 of="$tmp" 2>/dev/null || true
-  n="$(wc -c < "$tmp" 2>/dev/null | tr -d ' ')"
-  if [[ "$n" != "512" ]]; then rm -f "$tmp"; return 1; fi
-  fp="$(shasum -a 256 < "$tmp" 2>/dev/null | cut -c1-32)"
-  rm -f "$tmp"
-  [[ -n "$fp" ]] || return 1
-  printf 'fp:%s' "$fp"
+  # No UUID — fall back to a boot-sector fingerprint, mirroring the main script's
+  # device_key() guard. Carry the sector through a pipe rather than a temp file
+  # (same symlink-TOCTOU-free path as device_key): base64-encode it (NUL-safe in a
+  # shell variable) and require EXACTLY 512 raw bytes — 684 base64 chars — before
+  # hashing. A cold `sudo -n` or a short read yields zero/short output, whose
+  # length check fails; hashing an empty read would otherwise mint a bogus, shared
+  # key and restore_keychain would then write the user's real password under the
+  # wrong account. Emit nothing (return 1) on a short read so callers treat it as
+  # "no stable identity". The hash is over the DECODED 512 raw bytes, so this
+  # produces the SAME fp:... as the main script's device_key() for the same drive.
+  b64="$(sudo -n dd if="/dev/r${d#/dev/}" bs=512 count=1 2>/dev/null | base64 2>/dev/null | tr -d '\n')"
+  [[ ${#b64} -eq 684 ]] || return 1
+  fp="$(printf '%s' "$b64" | base64 -d 2>/dev/null | shasum -a 256 | cut -c1-32)"
+  [[ -n "$fp" ]] && printf 'fp:%s' "$fp"
 }
 restore_keychain() {
   # The fresh-device test deletes the user's REAL per-device Keychain item
