@@ -171,7 +171,7 @@ t() {
     cfg.init.pwsaved) en="Password stored in the Keychain"; zh_cn="密码已存入 Keychain"; zh_tw="密碼已存入 Keychain" ;;
     cfg.init.dev)     en="Fixed device (e.g. /dev/disk4s1, Enter = auto-detect each time): "; zh_cn="固定设备（如 /dev/disk4s1，回车=每次自动识别）: "; zh_tw="固定裝置（如 /dev/disk4s1，Enter=每次自動辨識）: " ;;
     cfg.init.mode)    en="Default mode [ro/rw] (Enter = ro): "; zh_cn="默认模式 [ro/rw]（回车=ro）: "; zh_tw="預設模式 [ro/rw]（Enter=ro）: " ;;
-    cfg.unknownsub)   en="Unknown config subcommand: %s (available: show / set-password / set-device / set-mode / clear-password / init)"; zh_cn="未知 config 子命令：%s（可用：show / set-password / set-device / set-mode / clear-password / init）"; zh_tw="未知 config 子命令：%s（可用：show / set-password / set-device / set-mode / clear-password / init）" ;;
+    cfg.unknownsub)   en="Unknown config subcommand: %s (available: show / set-device / set-mode / init). Passwords are saved per drive on mount; use 'bltusb forget' to remove."; zh_cn="未知 config 子命令：%s（可用：show / set-device / set-mode / init）。密码在挂载时按盘保存；删除用 'bltusb forget'。"; zh_tw="未知 config 子命令：%s（可用：show / set-device / set-mode / init）。密碼在掛載時按磁碟儲存；刪除用 'bltusb forget'。" ;;
     lang.header)      en="Language settings"; zh_cn="语言设置"; zh_tw="語言設定" ;;
     lang.effective)   en="Effective"; zh_cn="当前生效"; zh_tw="目前生效" ;;
     lang.override)    en="Override"; zh_cn="覆盖设置"; zh_tw="覆寫設定" ;;

@@ -4,3 +4,6 @@ config
 *.local
 *.log
 .DS_Store
+
+# audit workflow scripts (local dev tooling, hardcoded paths)
+.audit/

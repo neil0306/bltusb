@@ -75,12 +75,15 @@ restore_keychain() {
   # verify the per-device slot actually came back via kc_has afterwards.
   local rc=0
   if [[ -n "$FRESH_DEVKEY" ]]; then
-    local restore="${FRESH_DEVORIG:-$FRESH_ORIG}"
-    if [[ -n "$restore" ]]; then
+    # Only restore a per-device item that ACTUALLY existed before the test
+    # (FRESH_DEVORIG). If the drive had none (an upgrade user with only the legacy
+    # global item), delete anything the test created so we leave the exact prior
+    # state — never mint a new per-device item that then shadows the migration path.
+    if [[ -n "$FRESH_DEVORIG" ]]; then
       # Feed the secret on stdin (`-w` with no value) so the plaintext never
       # appears in argv where a concurrent `ps` could read it — same pattern as
       # the main script's keychain_set(). The interactive form prompts twice.
-      if printf '%s\n%s\n' "$restore" "$restore" \
+      if printf '%s\n%s\n' "$FRESH_DEVORIG" "$FRESH_DEVORIG" \
           | security add-generic-password -U -s "$KC_SVC" -a "$FRESH_DEVKEY" -w >/dev/null 2>&1; then
         # Confirm the secret is actually retrievable again, not just that the
         # command returned 0.

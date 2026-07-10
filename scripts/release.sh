@@ -131,10 +131,13 @@ if [[ $DRY_RUN -eq 1 ]]; then
   SHA="<computed-from-$TAG-tarball>"
   printf '   \033[2m[dry-run] would sha256: %s\033[0m\n' "$TARBALL_URL"
 else
+  # Download into a private mktemp dir (0700), not a predictable /tmp path, so a
+  # local symlink/pre-created file can't redirect the write or swap the artifact.
+  TMPD="$(mktemp -d)"; trap 'rm -rf "$TMPD"' EXIT
   SHA=""
   for _ in 1 2 3 4 5 6; do
-    if curl -fsSL "$TARBALL_URL" -o /tmp/bltusb-"$NEW".tar.gz 2>/dev/null; then
-      SHA="$(shasum -a 256 /tmp/bltusb-"$NEW".tar.gz | awk '{print $1}')"
+    if curl -fsSL "$TARBALL_URL" -o "$TMPD/bltusb.tar.gz" 2>/dev/null; then
+      SHA="$(shasum -a 256 "$TMPD/bltusb.tar.gz" | awk '{print $1}')"
       [[ -n "$SHA" ]] && break
     fi
     sleep 3
