@@ -53,6 +53,26 @@ fi
 if [[ $DRY_RUN -eq 0 && -d "$TAP_DIR/.git" ]] && [[ -n "$(git -C "$TAP_DIR" status --porcelain)" ]]; then
   die "tap repo ($TAP_DIR) is not clean — commit or stash first"
 fi
+# Refuse to release from anything but main, synced with origin/main. The push
+# below ships whatever HEAD points at, so without this a release cut from a
+# feature branch (or a stale/ahead-of-origin main) would tag the wrong code.
+RELEASE_BRANCH="${RELEASE_BRANCH:-main}"
+if [[ $DRY_RUN -eq 0 ]]; then
+  CUR_BRANCH="$(git branch --show-current)"
+  [[ "$CUR_BRANCH" == "$RELEASE_BRANCH" ]] \
+    || die "not on $RELEASE_BRANCH (on '${CUR_BRANCH:-detached HEAD}') — release only from $RELEASE_BRANCH"
+  git fetch origin "$RELEASE_BRANCH" >/dev/null 2>&1 \
+    || die "git fetch origin $RELEASE_BRANCH failed"
+  LOCAL_HEAD="$(git rev-parse HEAD)"
+  ORIGIN_HEAD="$(git rev-parse "origin/$RELEASE_BRANCH")"
+  # Allow HEAD to equal origin, or to be strictly ahead of it (a clean
+  # fast-forward, i.e. origin is an ancestor of HEAD). Refuse if HEAD is behind
+  # or has diverged.
+  if [[ "$LOCAL_HEAD" != "$ORIGIN_HEAD" ]] \
+     && ! git merge-base --is-ancestor "$ORIGIN_HEAD" "$LOCAL_HEAD"; then
+    die "HEAD is not in sync with origin/$RELEASE_BRANCH (behind or diverged) — pull/rebase first"
+  fi
+fi
 
 CUR="$(grep -m1 '^VERSION=' bltusb | sed -E 's/.*"(.*)".*/\1/')"
 [[ "$CUR" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "cannot parse current VERSION ($CUR)"
@@ -95,7 +115,7 @@ say "Commit, tag, push"
 run git add bltusb
 run git commit -m "release: $TAG"
 run git tag -a "$TAG" -m "bltusb $TAG"
-run git push origin HEAD
+run git push origin "HEAD:$RELEASE_BRANCH"
 run git push origin "$TAG"
 ok "pushed $TAG"
 

@@ -41,10 +41,24 @@ settle() { sleep 2; }
 kc_has() { security find-generic-password -s "$KC_SVC" -a "$1" -w >/dev/null 2>&1; }
 # Same per-volume key derivation bltusb uses (Partition UUID, else boot-sector fingerprint).
 dev_key() {
-  local d="$1" uuid
+  local d="$1" uuid tmp n fp
   uuid="$(diskutil info "$d" 2>/dev/null | awk -F': +' '/Partition UUID/{print $2; exit}')"
-  if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"
-  else printf 'fp:%s' "$(sudo -n dd if="/dev/r${d#/dev/}" bs=512 count=1 2>/dev/null | shasum -a 256 | cut -c1-32)"; fi
+  if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"; return 0; fi
+  # No UUID — fall back to a boot-sector fingerprint, mirroring the main
+  # script's device_key() guard. Write the raw sector to a temp file and require
+  # EXACTLY 512 bytes before hashing. A cold `sudo -n` or a short read yields
+  # zero bytes, whose sha256 is the empty-string constant (e3b0c442...); hashing
+  # that would mint a bogus, shared key and restore_keychain would then write the
+  # user's real password under the wrong account. Emit nothing (return 1) on a
+  # short read so callers treat it as "no stable identity".
+  tmp="$(mktemp -t bltusb.testsector 2>/dev/null)" || return 1
+  sudo -n dd if="/dev/r${d#/dev/}" bs=512 count=1 of="$tmp" 2>/dev/null || true
+  n="$(wc -c < "$tmp" 2>/dev/null | tr -d ' ')"
+  if [[ "$n" != "512" ]]; then rm -f "$tmp"; return 1; fi
+  fp="$(shasum -a 256 < "$tmp" 2>/dev/null | cut -c1-32)"
+  rm -f "$tmp"
+  [[ -n "$fp" ]] || return 1
+  printf 'fp:%s' "$fp"
 }
 restore_keychain() {
   # The fresh-device test deletes the user's REAL per-device Keychain item
@@ -54,17 +68,41 @@ restore_keychain() {
   # the legacy KC_ACC would silently destroy the user's remembered per-drive
   # password. Prefer the exact per-device value we captured; fall back to the
   # feed password (FRESH_ORIG) if the per-device slot happened to be empty.
+  # Restoring the user's REAL secrets is safety-critical: if security(1) fails
+  # (Keychain momentarily locked, re-auth required, transient error) we MUST NOT
+  # swallow the error and report success — that silently leaves the user without
+  # their saved password. Track any failure so the caller can FAIL the suite, and
+  # verify the per-device slot actually came back via kc_has afterwards.
+  local rc=0
   if [[ -n "$FRESH_DEVKEY" ]]; then
     local restore="${FRESH_DEVORIG:-$FRESH_ORIG}"
     if [[ -n "$restore" ]]; then
-      security add-generic-password -U -s "$KC_SVC" -a "$FRESH_DEVKEY" -w "$restore" >/dev/null 2>&1
+      # Feed the secret on stdin (`-w` with no value) so the plaintext never
+      # appears in argv where a concurrent `ps` could read it — same pattern as
+      # the main script's keychain_set(). The interactive form prompts twice.
+      if printf '%s\n%s\n' "$restore" "$restore" \
+          | security add-generic-password -U -s "$KC_SVC" -a "$FRESH_DEVKEY" -w >/dev/null 2>&1; then
+        # Confirm the secret is actually retrievable again, not just that the
+        # command returned 0.
+        kc_has "$FRESH_DEVKEY" || { no "restore failed: per-device key not retrievable"; rc=1; }
+      else
+        no "restore failed: per-device key (security add-generic-password errored)"; rc=1
+      fi
     else
       security delete-generic-password -s "$KC_SVC" -a "$FRESH_DEVKEY" >/dev/null 2>&1
     fi
   fi
   # Put the legacy global item back if we deleted it (the mount path's migration
   # fallback reads it), so this opt-in test never destroys the user's password.
-  [[ -n "$FRESH_LEGACYORIG" ]] && security add-generic-password -U -s "$KC_SVC" -a "$KC_ACC" -w "$FRESH_LEGACYORIG" >/dev/null 2>&1
+  if [[ -n "$FRESH_LEGACYORIG" ]]; then
+    if printf '%s\n%s\n' "$FRESH_LEGACYORIG" "$FRESH_LEGACYORIG" \
+        | security add-generic-password -U -s "$KC_SVC" -a "$KC_ACC" -w >/dev/null 2>&1; then
+      kc_has "$KC_ACC" || { no "restore failed: legacy global item not retrievable"; rc=1; }
+    else
+      no "restore failed: legacy global item (security add-generic-password errored)"; rc=1
+    fi
+  fi
+  return "$rc"
 }
 
 # ---------------------------------------------------------------------------
@@ -133,7 +171,16 @@ hardware() {
      && ! security find-generic-password -s bltusb-anylinuxfs -a passphrase -w >/dev/null 2>&1; then
     skip "no password in Keychain or ALFS_PASSPHRASE"; return
   fi
-  [[ -z "$(mp)" ]] || sudo anylinuxfs unmount >/dev/null 2>&1
+  # Never force-unmount a foreign mount. A pre-existing anylinuxfs mount may be
+  # a read-write volume with pending buffered writes that this test does not own;
+  # a raw `anylinuxfs unmount` skips the safe path (no sync, no -w wait-for-flush)
+  # and can lose in-flight data. Require the user to unmount it themselves via the
+  # main script's safe path (`bltusb umount` = sync + `-w`) before running the
+  # hardware suite.
+  if [[ -n "$(mp)" ]]; then
+    skip "an anylinuxfs volume is already mounted — run 'bltusb umount' first, then re-run this suite"
+    return
+  fi
 
   hdr "hardware: read-only mount + read"
   "$BIN" mount ro "$dev" >/dev/null 2>&1
@@ -245,8 +292,10 @@ fresh_device() {
   if [[ -n "$(mp)" ]]; then ok "passwordless mount ok"; else no "passwordless mount failed"; fi
   "$BIN" umount >/dev/null 2>&1; settle
 
-  restore_keychain; trap - EXIT
-  ok "original Keychain state restored"
+  # Only report success if the restore actually put the user's secrets back;
+  # restore_keychain() emits its own `no` on any failure and returns non-zero.
+  if restore_keychain; then ok "original Keychain state restored"; fi
+  trap - EXIT
 }
 
 # ---------------------------------------------------------------------------

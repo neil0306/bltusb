@@ -331,7 +331,10 @@ get_passphrase_quiet() {   # <device_key>
 # separately, only after a successful mount (opt-in).
 prompt_passphrase_only() {
   printf '%s' "${C_CYN}$(t pass.prompt)${C_RESET}" >&2
-  local pw; read -rs pw; printf '\n' >&2
+  # Clear IFS so leading/trailing whitespace in the password is preserved
+  # byte-for-byte — the default IFS would trim it, breaking valid BitLocker
+  # passwords that begin or end with spaces.
+  local pw; IFS= read -rs pw; printf '\n' >&2
   [[ -n "$pw" ]] || die "$(t pass.empty)"
   printf '%s' "$pw"
 }
@@ -497,6 +500,22 @@ device_is_external_partition() {   # <device>
   return 1
 }
 
+# Is <device> an EFI system partition? Uses the SAME type string that
+# autodetect_device and the wizard classify on (the diskutil list TYPE column,
+# which reads "EFI EFI System Partition"), so the explicit-path guards reject
+# exactly what auto-detect refuses. EFI is FAT and would otherwise pass the
+# 'external partition' + strong-identity checks and be rw-mountable, corrupting
+# boot/EFI metadata. Returns 0 only when the row is positively typed EFI*.
+device_is_efi() {   # <device>
+  local want="${1#/dev/}" id type
+  while IFS=$'\t' read -r id _ type; do
+    [[ "$id" == "$want" ]] || continue
+    [[ "$type" == EFI* ]] && return 0
+    return 1
+  done <<< "$(list_partition_rows)"
+  return 1
+}
+
 # Is the device currently mounted by the macOS host?
 host_mounted() { mount 2>/dev/null | grep -q "^/dev/${1#/dev/} "; }
 
@@ -563,6 +582,11 @@ resolve_device() {
     # can't be dodged by a /dev/rdiskXsY variant.
     [[ "$dev" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || die "$(t cfg.deverr)"
     device_is_external_partition "$dev" || die "$(t det.cantauto "$dev")"
+    # Reject EFI system partitions here too — the external-partition check above
+    # does NOT filter EFI, so an explicit `rw /dev/diskXs1` would otherwise flow
+    # (EFI is FAT) straight into a rw mount and corrupt boot/EFI metadata. Apply
+    # the same rejection auto-detect and the wizard use.
+    device_is_efi "$dev" && die "$(t det.cantauto "$dev")"
     if [[ "$mode" == "rw" ]]; then
       # For rw, require a strong identity so a stale disk number can't silently
       # point a writer at a different drive.
@@ -584,6 +608,12 @@ resolve_device() {
     # internal / non-external / EFI partition can never be unmounted and (rw)
     # mounted by bltusb even when its identity matches.
     device_is_external_partition "$DEVICE" || die "$(t det.cantauto "$DEVICE")"
+    # device_is_external_partition does NOT filter EFI (EFI is a FAT external
+    # partition), so a legacy/hand-edited config whose DEVICE_ID still matches an
+    # EFI system partition would otherwise flow into a rw mount and corrupt
+    # boot/EFI metadata. Apply the same EFI rejection used on the explicit-CLI and
+    # config-set paths.
+    device_is_efi "$DEVICE" && die "$(t det.cantauto "$DEVICE")"
     local cur
     cur="$(strong_device_identity "$DEVICE" 2>/dev/null || true)"
     if [[ -z "$cur" ]]; then
@@ -754,7 +784,7 @@ cmd_auto() {
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || (( choice < 1 || choice > n )); then die "$(t wiz.invalid)"; fi
   fi
 
-  local dev="/dev/${ids[$((choice-1))]}"
+  local sel="/dev/${ids[$((choice-1))]}"
 
   # Mode: default read-only
   echo; printf '%s\n' "$(t wiz.modehdr)"
@@ -763,6 +793,12 @@ cmd_auto() {
   printf '%s' "$(t wiz.modeask)"
   local mans mode="ro"; read -r mans
   [[ "$mans" == "2" ]] && mode="rw"
+
+  # Route through resolve_device so the wizard's rw path gets the same
+  # strong-device-identity gate as cmd_mount: a disk number that has drifted
+  # after a replug must never silently point a read-write mount at a different
+  # physical drive.
+  local dev; dev="$(resolve_device "$sel" "$mode")" || return 1
 
   echo
   perform_mount "$dev" "$mode" "false" || return 1
@@ -816,7 +852,10 @@ cmd_umount() {
   step "$(t umt.unmounting "$mp")"
   sync 2>/dev/null || true            # flush host dirty pages to the VM first
   # -w waits for the microVM to fully exit (finish flushing to the USB) before returning.
-  if sudo anylinuxfs unmount -w; then
+  # Pass the captured mountpoint so ONLY this volume is torn down: a bare
+  # `anylinuxfs unmount` unmounts ALL anylinuxfs mounts and could interrupt a
+  # second, actively-flushing rw mount (data-loss path).
+  if sudo anylinuxfs unmount -w "$mp"; then
     ok "$(t umt.done)"
     ok "$(t umt.saferemove)"
   else
@@ -895,6 +934,10 @@ cmd_config() {
         # match the guard applied on the explicit-CLI and pinned mount paths so a
         # dangerous device can't be persisted and later (rw) mounted.
         device_is_external_partition "$d" || die "$(t det.cantauto "$d")"
+        # Never pin an EFI system partition: external_partition does not filter
+        # EFI, so without this a pinned EFI (FAT) could later be (rw) mounted and
+        # corrupt boot/EFI metadata. Same rejection as auto-detect / the wizard.
+        device_is_efi "$d" && die "$(t det.cantauto "$d")"
         # Require a STRONG identity (UUID or boot-sector fingerprint) before we
         # pin a device — never persist an empty or label+size-only identity, or
         # the drift guard in resolve_device would be silently disabled.
@@ -918,6 +961,10 @@ cmd_config() {
         # Never pin a non-external partition (internal / EFI / stale path):
         # match the mount-path guard so a dangerous device can't be persisted.
         device_is_external_partition "$DEVICE" || die "$(t det.cantauto "$DEVICE")"
+        # Never pin an EFI system partition (external_partition does not filter
+        # EFI, and EFI is FAT so it would otherwise be rw-mountable): reject it
+        # the same way auto-detect and the wizard do before persisting.
+        device_is_efi "$DEVICE" && die "$(t det.cantauto "$DEVICE")"
         # Require a strong identity to pin the device; abort rather than persist
         # an empty/weak one that would disable the diskN-drift guard.
         DEVICE_ID="$(strong_device_identity "$DEVICE" 2>/dev/null || true)"

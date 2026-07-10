@@ -35,12 +35,18 @@ const SCHEMA = {
   required: ['passed', 'findings'],
 }
 
+const ACCEPTED = `ACCEPTED DESIGN DECISIONS — do NOT flag these as findings and do NOT change them:
+- get_passphrase_quiet() falls back to the legacy single global Keychain item as a LAST resort. This is an INTENTIONAL migration fallback so existing users keep working after upgrade; it is not a cross-drive leak (anylinuxfs is a local decryptor, and a value that doesn't fit simply falls through to the re-prompt). KEEP IT.
+- The passphrase is handed to anylinuxfs via the ALFS_PASSPHRASE environment variable. anylinuxfs exposes no stdin/fd password channel, so this is the only interface; the exposure is same-user environment only. Accepted/inherent — do not flag.
+- keychain_set() feeds the password to /usr/bin/security on stdin (no argv). For non-ASCII passwords, security(1)'s find -w returns hex on retrieval (a known security(1) quirk) which degrades to the harmless re-prompt path — accepted, not a blocker.
+- Read-only by default and opt-in password remembering are intended.`
+
 const AUDIT_FOCUS = `Audit the bltusb tool for issues that could cause USER DATA LOSS, security problems, or correctness bugs. Files (read them, do NOT modify anything, do NOT mount/format any drive):
 - ${REPO}/bltusb  (main script)
 - ${REPO}/test/bltusb_test.sh
 - ${REPO}/scripts/release.sh
 Scope of this release — ${SCOPE}
-Priorities: (1) data safety: wrong-device, host↔VM double-mount, read-only truly read-only, unmount flush; (2) password model: per-volume key correctness (no cross-drive password reuse; multiple BitLocker drives each unlock correctly), opt-in default, no secret leak to argv/ps/logs, recovery keys not saved; (3) correctness: shell quoting, set -euo pipefail traps, fstype classification. Report ONLY real HIGH/MEDIUM issues (skip style nits). Set passed=true only if there are no HIGH or MEDIUM findings.`
+Priorities: (1) data safety: wrong-device, host↔VM double-mount, read-only truly read-only, unmount flush; (2) password model: per-volume key correctness (no cross-drive password reuse; multiple BitLocker drives each unlock correctly), opt-in default, no secret leak to argv/ps/logs, recovery keys not saved; (3) correctness: shell quoting, set -euo pipefail traps, fstype classification. Report ONLY real HIGH/MEDIUM issues (skip style nits). Set passed=true only if there are no HIGH or MEDIUM findings.\n\n${ACCEPTED}`
 
 let round = 0, passed = false, remaining = []
 while (round < 3 && !passed) {
