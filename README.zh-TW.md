@@ -83,6 +83,7 @@ bltusb umount          # 用完卸載
 | `bltusb install` | 安裝 anylinuxfs |
 | `bltusb config [init\|set-device\|set-mode]` | 顯示/修改設定 |
 | `bltusb forget [/dev/diskXsY\|--all]` | 忘記某塊磁碟記住的密碼 |
+| `bltusb autounlock [install\|uninstall\|status]` | 插入即自動唯讀掛載 *（個人/開發便利）* |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | 切換選單語言 |
 | `bltusb help` / `version` | 說明 / 版本 |
 
@@ -112,6 +113,26 @@ BLTUSB_LANG=en bltusb  # 用環境變數臨時切換
 
 ```bash
 ALFS_PASSPHRASE='你的密碼' bltusb mount ro /dev/diskXsY
+```
+
+## 插入即自動解鎖（個人/開發便利）
+
+> ⚠️ **僅限個人 / 開發機。** 這是一個 Phase-0 便利功能，複用你互動式的 `sudo` 和 Keychain。它**不是**生產/SRAA 路徑，**絕不可**在受管或政府機群上啟用 —— 見 [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md)。
+
+`bltusb autounlock install` 會安裝一個**每使用者 LaunchAgent**，透過 `diskutil activity` 監聽插碟事件；插入外接碟時自動**唯讀**掛載 —— 類似 Windows 的「在這台電腦上自動解鎖」，但涵蓋整個流程：
+
+- 複用全部既有安全護欄（僅外接分割區、絕不碰 EFI / 整碟 / 內建碟、絕不在 macOS 已掛載之上二次掛載），並**始終唯讀掛載** —— 永不自動讀寫。
+- 加密碟先靜默嘗試這塊碟已存的 Keychain 密碼（或 `ALFS_PASSPHRASE`）；未命中才彈出原生 GUI 密碼框。成功後會（GUI）詢問是否記住該磁碟區密碼；還原金鑰永不儲存。
+- 無終端取得 root：在掛載時彈出**原生 macOS 管理員密碼框**（透過 `SUDO_ASKPASS`）—— 與 BitLocker 密碼不同。這是**唯一**的 sudo 路徑。兩個密碼都絕不進入命令列、被記錄命令的環境變數或暫存檔。
+- **運行機制：** 當 bltusb 是 **Homebrew 安裝**時，`autounlock install` 會自動委派給 **`brew services`** —— 等價於你自己執行 `brew services start bltusb`（**無需 `sudo`** —— 它是每使用者代理；**切勿** `sudo brew services`，那會安裝一個 root LaunchDaemon）。手動（非 Homebrew）安裝則回退到自管的每使用者 **LaunchAgent**。
+
+```bash
+bltusb autounlock install            # 掛載時彈管理員密碼框（brew 安裝則走 brew services）
+bltusb autounlock status             # 運行機制 + 是否已載入
+bltusb autounlock uninstall          # 停止服務 / 移除 LaunchAgent
+# Homebrew 安裝的等價命令（每使用者，無需 sudo）：
+brew services start bltusb
+brew services stop bltusb
 ```
 
 ## 說明與注意

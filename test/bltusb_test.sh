@@ -191,6 +191,250 @@ smoke() {
     no "could not extract sanitize_display from \$BIN"
   fi
   rm -f "$sanf"
+
+  smoke_autounlock
+}
+
+# ---------------------------------------------------------------------------
+# smoke: auto-unlock (v1.4.0) — install/uninstall/status/config round-trip,
+# plist shape, secret-free plist+askpass, and a no-drive scan. All offline: an
+# isolated HOME + XDG_CONFIG_HOME, an osascript stub, and the dryrun hook, so
+# no real drive / sudo / GUI is needed (CI-safe on Linux and macOS).
+# ---------------------------------------------------------------------------
+smoke_autounlock() {
+  hdr "smoke: auto-unlock status defaults to off"
+  local td home cfg plist show
+  td="$(mktemp -d)"; home="$td/home"; mkdir -p "$home/Library/LaunchAgents"
+  cfg="$td/cfg"; plist="$home/Library/LaunchAgents/co.carryai.bltusb.autounlock.plist"
+  show="$(HOME="$home" XDG_CONFIG_HOME="$cfg" BLTUSB_LANG=en "$BIN" autounlock status 2>/dev/null)"
+  assert_contains "status shows State" "State" "$show"
+  case "$show" in *"State"*"off"*) ok "auto-unlock off by default" ;; *) no "auto-unlock not off by default" ;; esac
+
+  hdr "smoke: auto-unlock config keys round-trip + validate rejects garbage"
+  # A hand-written config with valid + garbage values: valid persist, garbage
+  # falls back to the safe default (fail-closed), never executes.
+  mkdir -p "$cfg/bltusb"
+  cat > "$cfg/bltusb/config" <<EOF
+AUTOUNLOCK="on"
+EOF
+  show="$(HOME="$home" XDG_CONFIG_HOME="$cfg" BLTUSB_LANG=en "$BIN" config show 2>/dev/null)"
+  case "$show" in *"on"*) ok "valid AUTOUNLOCK load" ;; *) no "valid autounlock config not loaded" ;; esac
+  cat > "$cfg/bltusb/config" <<EOF
+AUTOUNLOCK="garbage; rm -rf /"
+EOF
+  show="$(HOME="$home" XDG_CONFIG_HOME="$cfg" BLTUSB_LANG=en "$BIN" config show 2>/dev/null)"
+  case "$show" in *"garbage"*) no "garbage autounlock config not rejected" ;; *) ok "garbage autounlock config falls back to defaults" ;; esac
+  case "$show" in *"off"*) ok "fail-closed default (off)" ;; *) no "unexpected autounlock default after garbage" ;; esac
+  rm -f "$cfg/bltusb/config"
+
+  hdr "smoke: auto-unlock install writes a valid, correct plist"
+  # Stub anylinuxfs so ensure_installed passes without a real backend, and stub
+  # launchctl so bootstrap is a no-op (the plist is what we assert on).
+  local bindir; bindir="$td/bin"; mkdir -p "$bindir"
+  printf '#!/bin/sh\necho ready\n' > "$bindir/anylinuxfs"; chmod +x "$bindir/anylinuxfs"
+  # Stateful launchctl stub: bootstrap loads / bootout unloads / print reflects it
+  # (state file under the isolated $HOME) — so the install honesty gate sees
+  # "loaded" and the verifying stop-helper sees "unloaded" after bootout.
+  # shellcheck disable=SC2016  # stub body vars expand at run time, not here
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'st="$HOME/.bltusb_lcstate"' \
+    'case "$1" in' \
+    '  bootstrap) : > "$st" ;;' \
+    '  bootout) rm -f "$st" ;;' \
+    '  print) [ -f "$st" ] || exit 1 ;;' \
+    'esac' \
+    'exit 0' > "$bindir/launchctl"; chmod +x "$bindir/launchctl"
+  # Stub `brew` so detection resolves to the self path HERMETICALLY (the fake
+  # `brew --prefix bltusb` never matches the running binary) and the self path's
+  # defensive `brew services stop` no-ops against the stub, not real brew.
+  # shellcheck disable=SC2016  # stub body: $1/$2 are the stub's runtime args, must NOT expand here
+  printf '#!/bin/sh\ncase "$1 $2" in "--prefix bltusb") echo /nonexistent/notbltusb ;; esac\nexit 0\n' > "$bindir/brew"; chmod +x "$bindir/brew"
+  HOME="$home" XDG_CONFIG_HOME="$cfg" PATH="$bindir:$PATH" BLTUSB_LANG=en "$BIN" autounlock install >/dev/null 2>&1
+  if [[ -f "$plist" ]]; then
+    ok "plist written"
+    if command -v plutil >/dev/null 2>&1; then
+      if plutil -lint "$plist" >/dev/null 2>&1; then ok "plist passes plutil -lint"; else no "plist failed plutil -lint"; fi
+    else
+      skip "plutil not available (non-macOS) — skipping lint"
+    fi
+    local pc; pc="$(cat "$plist")"
+    assert_contains "plist Label"          "co.carryai.bltusb.autounlock" "$pc"
+    assert_contains "plist KeepAlive"      "<key>KeepAlive</key>"         "$pc"
+    assert_contains "plist RunAtLoad"      "<key>RunAtLoad</key>"         "$pc"
+    assert_contains "plist daemon arg"     "__autounlock-daemon"          "$pc"
+    assert_contains "plist StandardErr null" "<key>StandardErrorPath</key>" "$pc"
+    case "$pc" in *"<key>StandardErrorPath</key>"*"<string>/dev/null</string>"*) ok "StandardErrorPath = /dev/null" ;; *) no "StandardErrorPath not /dev/null" ;; esac
+    # No password-shaped content may ever reach the plist.
+    if grep -iqE 'password|passphrase|ALFS_PASSPHRASE|[0-9]{6}-[0-9]{6}' "$plist"; then no "plist contains password-shaped content"; else ok "plist has no password-shaped content"; fi
+  else
+    no "install did not write plist"
+  fi
+  show="$(HOME="$home" XDG_CONFIG_HOME="$cfg" PATH="$bindir:$PATH" BLTUSB_LANG=en "$BIN" autounlock status 2>/dev/null)"
+  case "$show" in *"State"*"on"*) ok "status → on after install" ;; *) no "status not on after install" ;; esac
+  case "$show" in *"self-managed LaunchAgent"*) ok "status shows self-managed mechanism" ;; *) no "status missing self mechanism" ;; esac
+  if grep -q 'AUTOUNLOCK_VIA="self"' "$cfg/bltusb/config" 2>/dev/null; then ok "AUTOUNLOCK_VIA=self persisted"; else no "AUTOUNLOCK_VIA=self not persisted"; fi
+
+  hdr "smoke: auto-unlock uninstall removes plist + sets AUTOUNLOCK=off"
+  HOME="$home" XDG_CONFIG_HOME="$cfg" PATH="$bindir:$PATH" BLTUSB_LANG=en "$BIN" autounlock uninstall >/dev/null 2>&1
+  if [[ -f "$plist" ]]; then no "plist still present after uninstall"; else ok "plist removed"; fi
+  if grep -q 'AUTOUNLOCK="off"' "$cfg/bltusb/config" 2>/dev/null; then ok "AUTOUNLOCK=off after uninstall"; else no "AUTOUNLOCK not off after uninstall"; fi
+
+  smoke_autounlock_brew "$td"
+
+  hdr "smoke: generated askpass helper carries no secret"
+  # Extract make_askpass_helper() + its deps and run it in isolation, then grep
+  # the generated helper for password-shaped content.
+  local akf; akf="$(mktemp)"
+  {
+    echo 'BLTUSB_LANG_CODE=en'
+    sed -n '/^t() {/,/^}/p' "$BIN"
+    sed -n '/^make_askpass_helper() {/,/^}/p' "$BIN"
+    # shellcheck disable=SC2016  # literal probe body, must NOT expand here
+    printf '%s\n' 'h="$(make_askpass_helper)"; printf "%s\n" "$h"; cat "$h"; rm -rf "$(dirname "$h")"'
+  } > "$akf"
+  local akout; akout="$(bash "$akf" 2>/dev/null)"
+  if printf '%s' "$akout" | grep -iqE 'password.?=|passphrase.?=|[0-9]{6}-[0-9]{6}|STUBPASS'; then
+    no "askpass helper contains password-shaped content"
+  else
+    ok "askpass helper has no password-shaped content"
+  fi
+  rm -f "$akf"
+
+  hdr "smoke: __autounlock-scan with no external drive exits 0, no dialog"
+  # An osascript stub records any GUI call; the dryrun hook keeps scan/mount from
+  # invoking sudo/anylinuxfs. With no external partitions the scan must be a
+  # clean no-op and must NOT pop a dialog.
+  local stub called; called="$td/dialog_called"
+  stub="$td/osastub.sh"
+  printf '#!/bin/sh\necho called >> "%s"\necho "text returned:x, gave up:false"\n' "$called" > "$stub"; chmod +x "$stub"
+  local scan_rc=0
+  HOME="$home" XDG_CONFIG_HOME="$cfg" BLTUSB_LANG=en \
+    BLTUSB_AUTOUNLOCK_DRYRUN=1 BLTUSB_OSASCRIPT_STUB="$stub" \
+    "$BIN" __autounlock-scan >/dev/null 2>&1 || scan_rc=$?
+  if [[ $scan_rc -eq 0 ]]; then ok "__autounlock-scan exits 0"; else no "__autounlock-scan non-zero ($scan_rc)"; fi
+  # In the dryrun path no dialog should ever fire (even if a drive happens to be
+  # present, dryrun prints the intended action instead of prompting).
+  if [[ -f "$called" ]]; then no "scan popped a GUI dialog (dryrun should not)"; else ok "scan popped no dialog"; fi
+
+  hdr "smoke: auto-unlock dialog prompt is sanitized before display"
+  # gui_prompt_passphrase must route the (media-derived) label through the same
+  # sanitize discipline: prove a control/bidi char in a label can't reach the
+  # dialog. We drive gui_prompt_passphrase with a stub that echoes back the argv
+  # (the AppleScript text) so we can inspect what would be displayed.
+  local gpf; gpf="$(mktemp)"
+  {
+    echo 'BLTUSB_LANG_CODE=en'
+    sed -n '/^t() {/,/^}/p' "$BIN"
+    sed -n '/^_osascript() {/,/^}/p' "$BIN"
+    sed -n '/^_as_escape()/,/^}/p' "$BIN"
+    sed -n '/^gui_prompt_passphrase() {/,/^}/p' "$BIN"
+    # shellcheck disable=SC2016  # literal probe body, must NOT expand here
+    printf '%s\n' 'pw="$(gui_prompt_passphrase "safe-label")"; printf "pw=[%s]\n" "$pw"'
+  } > "$gpf"
+  # Stub that returns a canned passphrase and records the argv (the AppleScript
+  # program text) to a file — gui_prompt_passphrase suppresses osascript stderr,
+  # so route the capture through a file (AU_STUB_ARGS) instead of stderr.
+  local pstub argf; pstub="$td/pstub.sh"; argf="$td/dialog_args"
+  # shellcheck disable=SC2016  # stub body: $* and $AU_STUB_ARGS expand at run time
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "$AU_STUB_ARGS"\necho "text returned:CANNED, gave up:false"\n' > "$pstub"; chmod +x "$pstub"
+  local gpout
+  gpout="$(AU_STUB_ARGS="$argf" BLTUSB_OSASCRIPT_STUB="$pstub" bash "$gpf" 2>/dev/null)"
+  case "$gpout" in *"pw=[CANNED]"*) ok "gui_prompt_passphrase returns stub passphrase on stdout" ;; *) no "gui_prompt_passphrase did not return stub passphrase (got: $gpout)" ;; esac
+  # The dialog text must reference our translated prompt (proving the label flows
+  # through t()/the sanitized display path, not raw into the AppleScript verb),
+  # and must use `hidden answer` so the secret is never echoed on screen.
+  if grep -q 'BitLocker password' "$argf" 2>/dev/null; then ok "dialog uses translated prompt text"; else no "dialog prompt text missing"; fi
+  if grep -q 'hidden answer' "$argf" 2>/dev/null; then ok "dialog uses hidden answer (secret not shown)"; else no "dialog not hidden answer"; fi
+  rm -f "$gpf" "$argf"
+
+  hdr "smoke: auto-unlock dialog resists AppleScript injection via crafted volume label"
+  # sanitize_display does NOT strip backslash/quote, so a label like  x" & (do
+  # shell script "...")  must be neutralized by _as_escape before it reaches the
+  # osascript program text — else a hostile USB label injects code on auto-mount.
+  local escf escout
+  escf="$(printf '%s\n%s\n' "$(sed -n '/^_as_escape()/,/^}/p' "$BIN")" '_as_escape '\''a\" & (do shell script \"x\")'\''')"
+  escout="$(bash -c "$escf" 2>/dev/null)"
+  case "$escout" in
+    *'\\\"'*) ok "_as_escape escapes backslash+quote (breakout neutralized)" ;;
+    *) no "_as_escape leaves AppleScript breakout unescaped (got: $escout)" ;;
+  esac
+
+  rm -rf "$td"
+}
+
+# ---------------------------------------------------------------------------
+# smoke: auto-unlock brew-services path (v1.4.0). Exercises the REAL detector
+# (no env override): a COPY of the binary is placed under a fake Homebrew
+# formula prefix, and a stubbed `brew` reports that same prefix for
+# `brew --prefix bltusb`, so autounlock_via() resolves to `brew` by canonical
+# identity match. The stub records argv and makes `brew services list` report
+# `bltusb started`. Install must invoke `brew services start bltusb`, persist
+# AUTOUNLOCK_VIA="brew", status must show the brew mechanism, uninstall must
+# invoke `brew services stop bltusb`. Fully offline (isolated HOME + XDG).
+# ---------------------------------------------------------------------------
+smoke_autounlock_brew() {
+  local outer="$1" td home cfg bindir argf show fp fbin
+  hdr "smoke: auto-unlock brew path delegates to \`brew services\` (real detection)"
+  td="$outer/brew"; home="$td/home"; cfg="$td/cfg"; bindir="$td/bin"
+  fp="$td/prefix"                      # fake `brew --prefix bltusb`
+  mkdir -p "$home" "$cfg" "$bindir" "$fp/bin"
+  argf="$td/brew_args"
+  fbin="$fp/bin/bltusb"                # the "formula" binary = a copy of $BIN
+  cp "$BIN" "$fbin"; chmod +x "$fbin"
+  # Fake brew: record argv; report the fake prefix for `--prefix bltusb` (so the
+  # running copy matches by identity → detector picks `brew`), and `started`.
+  # shellcheck disable=SC2016  # stub body: $BREW_ARGS/$BREW_FAKE_PREFIX/$* expand at run time
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'printf "%s\n" "$*" >> "$BREW_ARGS"' \
+    'st="$HOME/.bltusb_brewstate"' \
+    'case "$*" in' \
+    '  "--prefix bltusb") echo "$BREW_FAKE_PREFIX" ;;' \
+    '  "services start bltusb") echo started > "$st" ;;' \
+    '  "services stop bltusb") echo stopped > "$st" ;;' \
+    '  "services list") echo "bltusb $(cat "$st" 2>/dev/null || echo none) $HOME/foo" ;;' \
+    'esac' \
+    'exit 0' > "$bindir/brew"; chmod +x "$bindir/brew"
+  printf '#!/bin/sh\necho ready\n' > "$bindir/anylinuxfs"; chmod +x "$bindir/anylinuxfs"
+  # Stateful launchctl stub (see self test) so the verifying `_autounlock_stop_self`
+  # (called by the brew install to enforce single-daemon) confirms "not loaded".
+  # shellcheck disable=SC2016  # stub body vars expand at run time, not here
+  printf '%s\n' \
+    '#!/bin/sh' \
+    'st="$HOME/.bltusb_lcstate"' \
+    'case "$1" in' \
+    '  bootstrap) : > "$st" ;;' \
+    '  bootout) rm -f "$st" ;;' \
+    '  print) [ -f "$st" ] || exit 1 ;;' \
+    'esac' \
+    'exit 0' > "$bindir/launchctl"; chmod +x "$bindir/launchctl"
+
+  # Transition guard: simulate a PRIOR self-managed agent (plist + "loaded"
+  # state), so the brew install must actively DEACTIVATE it (single-daemon
+  # enforcement), not merely avoid writing one.
+  mkdir -p "$home/Library/LaunchAgents"
+  : > "$home/Library/LaunchAgents/co.carryai.bltusb.autounlock.plist"
+  : > "$home/.bltusb_lcstate"
+
+  # Run the COPIED binary (under the fake prefix), NOT $BIN, so detection matches.
+  local run_env=(BREW_ARGS="$argf" BREW_FAKE_PREFIX="$fp" HOME="$home" XDG_CONFIG_HOME="$cfg" PATH="$bindir:$PATH" BLTUSB_LANG=en)
+  env "${run_env[@]}" "$fbin" autounlock install >/dev/null 2>&1
+  if grep -q '^services start bltusb$' "$argf" 2>/dev/null; then ok "install invoked \`brew services start bltusb\`"; else no "install did not invoke brew services start"; fi
+  if grep -q 'AUTOUNLOCK_VIA="brew"' "$cfg/bltusb/config" 2>/dev/null; then ok "AUTOUNLOCK_VIA=brew persisted (real detection)"; else no "AUTOUNLOCK_VIA=brew not persisted"; fi
+  # Single-daemon enforcement: the pre-seeded self plist must be GONE and the
+  # self agent unloaded (bootout ran) — the brew install deactivated it.
+  if [[ -f "$home/Library/LaunchAgents/co.carryai.bltusb.autounlock.plist" ]]; then no "brew install left the prior self plist (double daemon)"; else ok "brew install deactivated the prior self plist (single mechanism)"; fi
+  if [[ -f "$home/.bltusb_lcstate" ]]; then no "brew install did not bootout the self agent"; else ok "brew install booted out the self agent"; fi
+
+  show="$(env "${run_env[@]}" "$fbin" autounlock status 2>/dev/null)"
+  case "$show" in *"Homebrew services"*) ok "status shows brew mechanism" ;; *) no "status missing brew mechanism (got: $show)" ;; esac
+  case "$show" in *"State"*"on"*) ok "brew status → on after install" ;; *) no "brew status not on after install" ;; esac
+
+  : > "$argf"
+  env "${run_env[@]}" "$fbin" autounlock uninstall >/dev/null 2>&1
+  if grep -q '^services stop bltusb$' "$argf" 2>/dev/null; then ok "uninstall invoked \`brew services stop bltusb\`"; else no "uninstall did not invoke brew services stop"; fi
+  if grep -q 'AUTOUNLOCK="off"' "$cfg/bltusb/config" 2>/dev/null; then ok "AUTOUNLOCK=off after brew uninstall"; else no "AUTOUNLOCK not off after brew uninstall"; fi
 }
 
 # ---------------------------------------------------------------------------
@@ -283,7 +527,93 @@ hardware() {
     rm -rf "$tmp"
   fi
 
+  autounlock_hw "$dev"
+
   fresh_device "$dev"
+}
+
+# autounlock_hw — opt-in hardware check for the v1.4.0 auto-unlock flow. Uses the
+# osascript STUB (no human needed) + the real drive: proves the dry-run scan
+# selects the correct external /dev/diskXsY (skipping EFI/whole-disk), then the
+# real (non-dryrun) autounlock_mount mounts ro, read-back+md5, and unmounts —
+# reusing the same Keychain save/restore discipline as fresh_device. Off by
+# default; enable with BLTUSB_TEST_AUTOUNLOCK=1.
+autounlock_hw() {
+  local dev="$1" out M f
+  hdr "hardware: auto-unlock scan + ro mount (opt-in, stubbed GUI)"
+  if [[ "${BLTUSB_TEST_AUTOUNLOCK:-}" != "1" ]]; then
+    skip "set BLTUSB_TEST_AUTOUNLOCK=1 to run the auto-unlock hardware flow"; return
+  fi
+  if [[ -n "$(mp)" ]]; then skip "a volume is already mounted — unmount first"; return; fi
+
+  # 1) dry-run scan must select the detected BitLocker partition and never an
+  #    EFI/whole-disk one. The dryrun hook prints "would mount <dev> ...".
+  out="$(BLTUSB_AUTOUNLOCK_DRYRUN=1 BLTUSB_LANG=en "$BIN" __autounlock-scan 2>&1)"
+  case "$out" in
+    *"would mount $dev"*) ok "dry-run scan selected $dev" ;;
+    *"would mount /dev/disk"*[0-9]*) no "dry-run scan selected the wrong device: $out" ;;
+    *) skip "dry-run scan selected nothing (drive may be host-mounted) — $out" ;;
+  esac
+  case "$out" in *EFI*) no "dry-run scan considered an EFI partition" ;; *) ok "dry-run scan skipped EFI/whole-disk" ;; esac
+
+  # 2) real auto-mount path (ro). Feed a stub osascript that returns the stored
+  #    passphrase so no human dialog is needed; the passphrase itself comes from
+  #    the Keychain/env quiet path first, so the stub is only a fallback.
+  local stub td dk kc_acct
+  # The stub must contain NO secret. Decide at runtime where it fetches the
+  # passphrase FROM: prefer the Keychain (the stub runs `security ...` itself,
+  # given only the non-secret account id via an exported env var); fall back to
+  # ALFS_PASSPHRASE passed through the environment (a value, read at runtime —
+  # never baked into the stub file). Clean up the temp dir on any early return.
+  dk="$(dev_key "$dev")"
+  # Pick the Keychain account that actually holds a value (per-device first, then
+  # the legacy global). Empty string means "no Keychain value — use the env var".
+  kc_acct=""
+  if security find-generic-password -s "$KC_SVC" -a "$dk" -w >/dev/null 2>&1; then
+    kc_acct="$dk"
+  elif security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w >/dev/null 2>&1; then
+    kc_acct="$KC_ACC"
+  fi
+  if [[ -z "$kc_acct" && -z "${ALFS_PASSPHRASE:-}" ]]; then
+    skip "no known passphrase to feed the stub"; return
+  fi
+  td="$(mktemp -d)"; stub="$td/osastub.sh"
+  # shellcheck disable=SC2064  # expand $td now so the trap removes THIS temp dir
+  trap "rm -rf '$td'" RETURN
+  # The stub reads the secret at runtime from the Keychain (given the account id
+  # via $KC_STUB_ACCT) or, if none, from $ALFS_PASSPHRASE in its own environment.
+  # No password-shaped content is ever written into the stub file. Decline save.
+  # shellcheck disable=SC2016  # stub body: $KC_STUB_ACCT/$ALFS_PASSPHRASE/$p expand at run time inside the stub, NOT here
+  {
+    printf '#!/bin/sh\n'
+    printf 'case "$*" in\n'
+    printf '  *hidden*)\n'
+    printf '    if [ -n "$KC_STUB_ACCT" ]; then\n'
+    printf '      p="$(security find-generic-password -s "%s" -a "$KC_STUB_ACCT" -w 2>/dev/null)"\n' "$KC_SVC"
+    printf '    else\n'
+    printf '      p="$ALFS_PASSPHRASE"\n'
+    printf '    fi\n'
+    printf '    printf "text returned:%%s, gave up:false\\n" "$p" ;;\n'
+    printf '  *) echo "button returned:Not now" ;;\n'
+    printf 'esac\n'
+  } > "$stub"; chmod +x "$stub"
+  settle
+  KC_STUB_ACCT="$kc_acct" BLTUSB_OSASCRIPT_STUB="$stub" BLTUSB_LANG=en "$BIN" __autounlock-scan >/dev/null 2>&1
+  wait_mount; M="$(mp)"
+  if [[ -n "$M" ]]; then
+    ok "auto-unlock mounted ro: $M"
+    local probe="$M/bltusb_selftest_au_$$"
+    if touch "$probe" 2>/dev/null; then no "auto-unlock mount was writable (must be ro)"; rm -f "$probe"; else ok "auto-unlock mount is read-only"; fi
+    f="$(find "$M" -maxdepth 1 -type f ! -name '.*' 2>/dev/null | head -1)"
+    if [[ -n "$f" ]]; then
+      if md5 -q "$f" >/dev/null 2>&1; then ok "read existing file via auto-unlock mount"; else no "could not read file via auto-unlock mount"; fi
+    fi
+    "$BIN" umount >/dev/null 2>&1
+    if [[ -z "$(mp)" ]]; then ok "auto-unlock volume unmounted"; else no "still mounted after umount"; fi
+  else
+    no "auto-unlock scan did not mount the drive"
+  fi
+  trap - RETURN; rm -rf "$td"; settle
 }
 
 # fresh_device — optional, opt-in: proves an UNSEEN device (empty Keychain)

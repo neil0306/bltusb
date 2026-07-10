@@ -83,6 +83,7 @@ bltusb umount          # unmount when done
 | `bltusb install` | Install anylinuxfs |
 | `bltusb config [init\|set-device\|set-mode]` | Show/change configuration |
 | `bltusb forget [/dev/diskXsY\|--all]` | Forget a remembered drive password |
+| `bltusb autounlock [install\|uninstall\|status]` | Auto-mount drives (read-only) on insert *(personal-dev)* |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | Switch menu language |
 | `bltusb help` / `version` | Help / version |
 
@@ -112,6 +113,26 @@ Resolution order when mounting: `env ALFS_PASSPHRASE` → this drive's saved pas
 
 ```bash
 ALFS_PASSPHRASE='your-password' bltusb mount ro /dev/diskXsY
+```
+
+## Auto-unlock on insert (personal-dev convenience)
+
+> ⚠️ **Personal / development machines only.** This is a Phase-0 convenience that reuses your interactive `sudo` and your Keychain. It is **not** the production/SRAA path and must **not** be enabled on a managed or government fleet — see [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md).
+
+`bltusb autounlock install` sets up a **per-user LaunchAgent** that watches for drive-insert events (`diskutil activity`) and, when you plug in an external drive, mounts it **read-only** automatically — just like Windows' *"Automatically unlock on this PC"*, but for the whole flow:
+
+- It reuses every existing safety guard (external-partition only, never EFI / whole-disk / internal, no double-mount over a live macOS mount) and **always mounts read-only** — it never auto-mounts read-write.
+- For an encrypted drive it tries this drive's saved Keychain password (or `ALFS_PASSPHRASE`) first, silently; only on a miss does it pop a native GUI password dialog. On success it offers (GUI) to remember the password for that specific volume. Recovery keys are never saved.
+- Getting root without a terminal: the mount pops a **native macOS admin-password dialog** (via `SUDO_ASKPASS`) — distinct from the BitLocker passphrase. This is the **only** sudo path. Neither secret is ever placed in a command line, an environment of a logged command, or a temp file.
+- **Mechanism:** when bltusb is **Homebrew-installed**, `autounlock install` delegates to **`brew services`** automatically — equivalently you can run `brew services start bltusb` yourself (**without `sudo`** — it is a per-user agent; **never** `sudo brew services`, which would install a root LaunchDaemon). For a manual (non-Homebrew) install it falls back to a self-managed per-user **LaunchAgent**.
+
+```bash
+bltusb autounlock install            # GUI admin prompt on mount (brew services if brew-installed)
+bltusb autounlock status             # mechanism + loaded state
+bltusb autounlock uninstall          # stop the service / remove the LaunchAgent
+# Homebrew-installed equivalents (per-user, NO sudo):
+brew services start bltusb
+brew services stop bltusb
 ```
 
 ## Notes

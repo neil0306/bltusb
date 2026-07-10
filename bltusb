@@ -29,6 +29,18 @@ DEVICE=""            # empty = auto-detect each time
 DEVICE_ID=""         # saved drive identity (UUID|label|bytes) to guard against diskN drift
 DEFAULT_MODE="ro"    # read-only by default, safer
 LANG_OVERRIDE=""     # empty = follow system language; else en / zh-CN / zh-TW
+AUTOUNLOCK="off"     # on|off — auto-mount external drives (read-only) on insert
+AUTOUNLOCK_VIA=""    # self|brew — mechanism running the daemon; empty = not yet recorded (detect)
+                     #   self = self-managed per-user LaunchAgent (manual installs)
+                     #   brew = delegated to `brew services` (Homebrew installs)
+
+# Auto-unlock LaunchAgent identity (Phase-0 personal-dev convenience)
+AUTOUNLOCK_LABEL="co.carryai.bltusb.autounlock"
+AUTOUNLOCK_PLIST="$HOME/Library/LaunchAgents/${AUTOUNLOCK_LABEL}.plist"
+# Legacy passwordless-root rule path — no longer written (the --nopasswd option
+# was removed as an unsafe root-escalation backdoor). Kept ONLY so uninstall can
+# defensively clean up a rule left by a prior build.
+AUTOUNLOCK_SUDOERS="/etc/sudoers.d/bltusb"
 
 BLTUSB_LANG_CODE="en"   # resolved at startup
 
@@ -193,6 +205,43 @@ t() {
     wiz.rwhint)       en="Tip: to edit files later, run: bltusb rw"; zh_cn="提示：以后要改文件就运行：bltusb rw"; zh_tw="提示：以後要改檔案就執行：bltusb rw" ;;
     wiz.mountedopen)  en="Already mounted: %s — opening it."; zh_cn="已经挂载：%s —— 直接为你打开"; zh_tw="已經掛載：%s —— 直接為你開啟" ;;
     main.unknown)     en="Unknown command: %s"; zh_cn="未知命令：%s"; zh_tw="未知命令：%s" ;;
+    au.usage)         en="Usage: bltusb autounlock <install|uninstall|status>"; zh_cn="用法：bltusb autounlock <install|uninstall|status>"; zh_tw="用法：bltusb autounlock <install|uninstall|status>" ;;
+    au.installed)     en="Auto-unlock installed — external drives will now auto-mount (read-only) on insert"; zh_cn="自动解锁已安装 —— 插入外接盘后会自动只读挂载"; zh_tw="自動解鎖已安裝 —— 插入外接磁碟後會自動唯讀掛載" ;;
+    au.uninstalled)   en="Auto-unlock removed"; zh_cn="自动解锁已移除"; zh_tw="自動解鎖已移除" ;;
+    au.already)       en="Auto-unlock is already installed"; zh_cn="自动解锁已安装"; zh_tw="自動解鎖已安裝" ;;
+    au.notinstalled)  en="Auto-unlock is not installed"; zh_cn="自动解锁未安装"; zh_tw="自動解鎖未安裝" ;;
+    au.needbin)       en="Cannot resolve this script's absolute path to install the LaunchAgent"; zh_cn="无法解析本脚本的绝对路径以安装 LaunchAgent"; zh_tw="無法解析本腳本的絕對路徑以安裝 LaunchAgent" ;;
+    au.status.header) en="Auto-unlock status"; zh_cn="自动解锁状态"; zh_tw="自動解鎖狀態" ;;
+    au.status.state)  en="State"; zh_cn="状态"; zh_tw="狀態" ;;
+    au.status.on)     en="on"; zh_cn="开"; zh_tw="開" ;;
+    au.status.off)    en="off"; zh_cn="关"; zh_tw="關" ;;
+    au.status.plist)  en="LaunchAgent plist"; zh_cn="LaunchAgent plist"; zh_tw="LaunchAgent plist" ;;
+    au.status.present) en="present"; zh_cn="存在"; zh_tw="存在" ;;
+    au.status.absent) en="absent"; zh_cn="不存在"; zh_tw="不存在" ;;
+    au.status.args)   en="ProgramArguments"; zh_cn="ProgramArguments"; zh_tw="ProgramArguments" ;;
+    au.status.loaded) en="Loaded (launchctl)"; zh_cn="已加载 (launchctl)"; zh_tw="已載入 (launchctl)" ;;
+    au.status.yes)    en="yes"; zh_cn="是"; zh_tw="是" ;;
+    au.status.no)     en="no"; zh_cn="否"; zh_tw="否" ;;
+    au.install.failed) en="LaunchAgent did not load (launchctl bootstrap/print failed) — auto-unlock NOT enabled"; zh_cn="LaunchAgent 未加载（launchctl bootstrap/print 失败）—— 自动解锁未启用"; zh_tw="LaunchAgent 未載入（launchctl bootstrap/print 失敗）—— 自動解鎖未啟用" ;;
+    au.legacy.sudoers) en="WARNING: could not remove a legacy passwordless-root rule at %s — a leftover root rule may remain; remove it manually with: sudo rm -f %s"; zh_cn="警告：无法移除位于 %s 的旧版免密 root 规则 —— 可能残留一条 root 规则；请手动移除：sudo rm -f %s"; zh_tw="警告：無法移除位於 %s 的舊版免密 root 規則 —— 可能殘留一條 root 規則；請手動移除：sudo rm -f %s" ;;
+    au.dialog.title)  en="bltusb — unlock drive"; zh_cn="bltusb — 解锁磁盘"; zh_tw="bltusb — 解鎖磁碟" ;;
+    au.dialog.prompt) en="Enter the BitLocker password for %s:"; zh_cn="请输入 %s 的 BitLocker 密码："; zh_tw="請輸入 %s 的 BitLocker 密碼：" ;;
+    au.admin.prompt)  en="bltusb needs your macOS admin password to mount the drive:"; zh_cn="bltusb 需要你的 macOS 管理员密码来挂载磁盘："; zh_tw="bltusb 需要你的 macOS 管理員密碼來掛載磁碟：" ;;
+    au.remember.title) en="bltusb — remember password?"; zh_cn="bltusb — 记住密码？"; zh_tw="bltusb — 記住密碼？" ;;
+    au.remember.prompt) en="Automatically unlock %s on this Mac next time?"; zh_cn="下次在这台 Mac 上自动解锁 %s 吗？"; zh_tw="下次在這台 Mac 上自動解鎖 %s 嗎？" ;;
+    au.remember.yes)  en="Remember"; zh_cn="记住"; zh_tw="記住" ;;
+    au.remember.no)   en="Not now"; zh_cn="暂不"; zh_tw="暫不" ;;
+    au.notify.mounted) en="Mounted read-only: %s"; zh_cn="已只读挂载：%s"; zh_tw="已唯讀掛載：%s" ;;
+    au.notify.failed) en="Auto-unlock failed for %s"; zh_cn="自动解锁失败：%s"; zh_tw="自動解鎖失敗：%s" ;;
+    au.phase0.note)   en="Phase-0 personal-dev convenience — reuses your sudo/Keychain. NOT for a managed/government fleet (see docs/SRAA-ASSESSMENT.md)."; zh_cn="Phase-0 个人/开发便利功能 —— 复用你的 sudo/Keychain。不适用于受管/政府机群（见 docs/SRAA-ASSESSMENT.md）。"; zh_tw="Phase-0 個人/開發便利功能 —— 複用你的 sudo/Keychain。不適用於受管/政府機群（見 docs/SRAA-ASSESSMENT.md）。" ;;
+    au.status.via)    en="Mechanism"; zh_cn="运行机制"; zh_tw="運行機制" ;;
+    au.via.brew)      en="Homebrew services"; zh_cn="Homebrew services"; zh_tw="Homebrew services" ;;
+    au.via.self)      en="self-managed LaunchAgent"; zh_cn="自管 LaunchAgent"; zh_tw="自管 LaunchAgent" ;;
+    au.brew.installed) en="Auto-unlock started via \`brew services\` — external drives will auto-mount (read-only) on insert"; zh_cn="已通过 \`brew services\` 启动自动解锁 —— 插入外接盘后会自动只读挂载"; zh_tw="已透過 \`brew services\` 啟動自動解鎖 —— 插入外接磁碟後會自動唯讀掛載" ;;
+    au.brew.failed)   en="Homebrew could not start the service (brew services start bltusb failed) — auto-unlock NOT enabled"; zh_cn="Homebrew 无法启动服务（brew services start bltusb 失败）—— 自动解锁未启用"; zh_tw="Homebrew 無法啟動服務（brew services start bltusb 失敗）—— 自動解鎖未啟用" ;;
+    au.brew.stopfail) en="WARNING: \`brew services stop bltusb\` failed — the service may still be running; stop it manually with: brew services stop bltusb"; zh_cn="警告：\`brew services stop bltusb\` 失败 —— 服务可能仍在运行；请手动停止：brew services stop bltusb"; zh_tw="警告：\`brew services stop bltusb\` 失敗 —— 服務可能仍在運行；請手動停止：brew services stop bltusb" ;;
+    au.self.stopfail) en="WARNING: could not fully stop the self-managed auto-unlock agent — it may still be loaded; try: launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock"; zh_cn="警告：未能完全停止自管理的自动解锁代理 —— 它可能仍在加载；可尝试：launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock"; zh_tw="警告：未能完全停止自管理的自動解鎖代理 —— 它可能仍在載入；可嘗試：launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock" ;;
+    au.dedup.failed)  en="Refusing to run two auto-unlock daemons: could not deactivate the other mechanism. Run \`bltusb autounlock uninstall\` first, then retry"; zh_cn="拒绝同时运行两个自动解锁守护进程：无法停用另一种机制。请先运行 \`bltusb autounlock uninstall\`，然后重试"; zh_tw="拒絕同時運行兩個自動解鎖守護程序：無法停用另一種機制。請先執行 \`bltusb autounlock uninstall\`，然後重試" ;;
     *)                en="$k"; zh_cn="$k"; zh_tw="$k" ;;
   esac
   case "$BLTUSB_LANG_CODE" in
@@ -228,6 +277,8 @@ load_config() {
       DEVICE_ID)     DEVICE_ID="$val" ;;
       DEFAULT_MODE)  DEFAULT_MODE="$val" ;;
       LANG_OVERRIDE) LANG_OVERRIDE="$val" ;;
+      AUTOUNLOCK)    AUTOUNLOCK="$val" ;;
+      AUTOUNLOCK_VIA) AUTOUNLOCK_VIA="$val" ;;
     esac
   done < "$CONFIG_FILE"
 }
@@ -236,6 +287,10 @@ load_config() {
 validate_config() {
   case "$DEFAULT_MODE" in ro|rw) ;; *) DEFAULT_MODE="ro" ;; esac
   case "$LANG_OVERRIDE" in ""|en|zh-CN|zh-TW) ;; *) LANG_OVERRIDE="" ;; esac
+  case "$AUTOUNLOCK" in on|off) ;; *) AUTOUNLOCK="off" ;; esac
+  # Empty = "not recorded" (an old config without the key) → callers detect it.
+  # A malformed non-empty value is fail-closed to empty (never trusted).
+  case "$AUTOUNLOCK_VIA" in self|brew|"") ;; *) AUTOUNLOCK_VIA="" ;; esac
   [[ -z "$DEVICE" || "$DEVICE" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || DEVICE=""
 }
 
@@ -248,10 +303,15 @@ save_config() {
 #                 replug that shifts diskN numbers can't make bltusb touch a different disk
 # DEFAULT_MODE  : default mount mode, ro (read-only, recommended) or rw (read-write)
 # LANG_OVERRIDE : menu language, empty = follow system; en / zh-CN / zh-TW
+# AUTOUNLOCK    : auto-mount external drives (read-only) on insert, on / off (default off)
+# AUTOUNLOCK_VIA: mechanism running the auto-unlock daemon, self / brew (default self)
+#                 self = self-managed per-user LaunchAgent; brew = via \`brew services\`
 DEVICE="${DEVICE}"
 DEVICE_ID="${DEVICE_ID}"
 DEFAULT_MODE="${DEFAULT_MODE}"
 LANG_OVERRIDE="${LANG_OVERRIDE}"
+AUTOUNLOCK="${AUTOUNLOCK}"
+AUTOUNLOCK_VIA="${AUTOUNLOCK_VIA}"
 EOF
   ok "$(t cfg.saved "${C_DIM}${CONFIG_FILE}${C_RESET}")"
 }
@@ -978,6 +1038,10 @@ cmd_config() {
       printf '  %-9s: %s\n' "$(t cfg.mode)"   "$DEFAULT_MODE"
       printf '  %-9s: %s\n' "$(t cfg.lang)"   "$(lang_name "$BLTUSB_LANG_CODE")"
       printf '  %-9s: %s\n' "$(t cfg.password)" "${C_DIM}$(t cfg.pass.perdrive)${C_RESET}"
+      local austate; if [[ "$AUTOUNLOCK" == "on" ]]; then austate="$(t au.status.on)"; else austate="$(t au.status.off)"; fi
+      printf '  %-9s: %s\n' "$(t au.status.header)" "$austate"
+      local auvia; if [[ "$(autounlock_via)" == "brew" ]]; then auvia="$(t au.via.brew)"; else auvia="$(t au.via.self)"; fi
+      printf '  %-9s: %s\n' "$(t au.status.via)" "$auvia"
       ;;
     set-device|device)
       local d="${1:-}"
@@ -1068,6 +1132,535 @@ cmd_forget() {
 }
 
 # ---------------------------------------------------------------------------
+# Auto-unlock (Phase-0 personal-dev convenience): a per-user LaunchAgent runs
+# `diskutil activity` and, on each external partition insert, auto-mounts it
+# read-only — trying the Keychain/env passphrase first, else a native GUI
+# dialog. This is ADDITIVE and OPT-IN. It reuses every existing guard
+# (device_is_external_partition / device_is_efi / fs_is_mountable / the
+# host-mount double-writer check) and the per-device Keychain discipline. It
+# NEVER auto-mounts rw, NEVER touches internal/EFI/whole disks, and NEVER puts
+# any secret into argv / a logged command / a temp file.
+#
+# Test hooks (no real GUI / drive / sudo needed, so CI can exercise the flow):
+#   BLTUSB_AUTOUNLOCK_DRYRUN=1  — scan/mount print the intended action and
+#                                 return without invoking sudo/anylinuxfs.
+#   BLTUSB_OSASCRIPT_STUB=<path> — every GUI call runs "<path> <args...>"
+#                                 instead of the real `osascript`, so a stub
+#                                 can echo a canned passphrase / button.
+# ---------------------------------------------------------------------------
+
+# Resolve THIS running script's absolute path, for the LaunchAgent plist. Prefer
+# a symlink-resolved path so a plist can't be pinned to a mutable symlink.
+autounlock_self_path() {
+  local src="${BASH_SOURCE[0]}" dir
+  if command -v realpath >/dev/null 2>&1; then
+    realpath "$src" 2>/dev/null && return 0
+  fi
+  # Fallback: resolve via cd/pwd -P (no realpath on older systems).
+  dir="$(cd "$(dirname "$src")" >/dev/null 2>&1 && pwd -P)" || return 1
+  printf '%s/%s' "$dir" "$(basename "$src")"
+}
+
+# Canonicalize a path (resolve symlinks) so two paths to the same file compare
+# equal. realpath(1) exists on modern macOS; fall back to cd/pwd -P.
+_realpath() {
+  if command -v realpath >/dev/null 2>&1; then realpath "$1" 2>/dev/null; return; fi
+  local d; d="$(cd "$(dirname "$1")" 2>/dev/null && pwd -P)" || return 1
+  printf '%s/%s' "$d" "$(basename "$1")"
+}
+
+# Decide the install mechanism: 'brew' ONLY when the RUNNING binary IS the
+# Homebrew-managed formula binary (canonical-identity match against
+# `brew --prefix bltusb`/bin/bltusb) — so a manual/dev install, even one that
+# happens to live under the brew prefix, correctly uses 'self'. Fail-safe to
+# 'self' on any uncertainty. No env override: the mechanism is derived, not
+# forced, so nothing external can flip it.
+autounlock_via() {
+  command -v brew >/dev/null 2>&1 || { printf 'self'; return 0; }
+  local self fprefix fbin
+  self="$(autounlock_self_path)" || { printf 'self'; return 0; }
+  self="$(_realpath "$self" 2>/dev/null || printf '%s' "$self")"
+  fprefix="$(brew --prefix bltusb 2>/dev/null)" || { printf 'self'; return 0; }
+  [[ -n "$fprefix" ]] || { printf 'self'; return 0; }
+  fbin="$(_realpath "$fprefix/bin/bltusb" 2>/dev/null || true)"
+  [[ -n "$fbin" && "$self" == "$fbin" ]] && { printf 'brew'; return 0; }
+  printf 'self'
+}
+
+# Deactivate a specific mechanism and VERIFY it — used to ENFORCE that only ONE
+# auto-unlock daemon is ever active, even across a self<->brew transition.
+# Deactivate the self-managed agent and VERIFY it is gone. Returns 0 only when
+# the agent is confirmed inactive (not loaded AND no plist) so callers can
+# enforce the single-daemon invariant rather than hope.
+_autounlock_stop_self() {
+  launchctl bootout "$(_au_domain)/${AUTOUNLOCK_LABEL}" >/dev/null 2>&1 || true
+  rm -f "$AUTOUNLOCK_PLIST" 2>/dev/null || true
+  ! launchctl print "$(_au_domain)/${AUTOUNLOCK_LABEL}" >/dev/null 2>&1 && [[ ! -f "$AUTOUNLOCK_PLIST" ]]
+}
+# Deactivate the Homebrew service and VERIFY it is not `started`. Returns 0 when
+# there's no brew (nothing to stop) or the service is confirmed stopped.
+_autounlock_stop_brew() {
+  command -v brew >/dev/null 2>&1 || return 0
+  brew services stop bltusb >/dev/null 2>&1 || true
+  # Separate query success from state inspection: a FAILED `brew services list`
+  # must NOT read as "stopped". Under pipefail, `! list | awk | grep` would turn a
+  # failed query into a false "verified stopped". Capture first, fail closed if
+  # the query itself fails (return 1), then inspect the state.
+  local services state
+  services="$(brew services list 2>/dev/null)" || return 1
+  state="$(printf '%s\n' "$services" | awk '$1=="bltusb"{print $2; exit}')"
+  [[ "$state" != "started" ]]
+}
+
+# Run osascript, or the test stub when BLTUSB_OSASCRIPT_STUB is set. The stub
+# receives the SAME argv as osascript would (so a test can inspect / respond to
+# the AppleScript program text) and its stdout is returned verbatim.
+_osascript() {
+  if [[ -n "${BLTUSB_OSASCRIPT_STUB:-}" ]]; then
+    "$BLTUSB_OSASCRIPT_STUB" "$@"
+  else
+    osascript "$@"
+  fi
+}
+
+# Escape a string for safe interpolation into an AppleScript double-quoted
+# literal: backslash FIRST, then double-quote. sanitize_display strips control
+# and bidi codepoints but NOT backslashes or quotes, so without this a crafted
+# volume label such as  x\" & (do shell script "...")  could break out of the
+# AppleScript string and inject code on the auto-unlock (hostile-media) path.
+_as_escape() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
+
+# Native GUI passphrase dialog (hidden answer). The secret is printed on stdout
+# and captured by the caller into a shell variable — it is NEVER placed in the
+# AppleScript program text or in argv. The volume label (arg 1) is display-only
+# and MUST already be sanitized by the caller. Returns non-zero on cancel/empty.
+gui_prompt_passphrase() {   # <label-for-display>
+  local label="$1" prompt title pw
+  prompt="$(t au.dialog.prompt "$label")"
+  title="$(t au.dialog.title)"
+  # `giving up after 120` auto-dismisses so a forgotten dialog can't wedge the
+  # daemon. The prompt/title are our own translated literals (label already
+  # sanitized), so they cannot inject AppleScript.
+  pw="$(_osascript -e "display dialog \"$(_as_escape "$prompt")\" default answer \"\" with title \"$(_as_escape "$title")\" with hidden answer giving up after 120" 2>/dev/null | sed -n 's/.*text returned:\(.*\), gave up:.*/\1/p; s/.*text returned:\(.*\)$/\1/p' | head -1)"
+  [[ -n "$pw" ]] || return 1
+  printf '%s' "$pw"
+}
+
+# After a successful auto-mount, offer (GUI) to remember this drive's password.
+# Recovery keys are never saved (reuse is_recovery_key). Needs a stable key.
+gui_offer_save() {   # <password> <device_key> <label-for-display>
+  [[ -n "$2" ]] || return 0
+  is_recovery_key "$1" && return 0
+  local prompt title yes no ans
+  prompt="$(t au.remember.prompt "$3")"; title="$(t au.remember.title)"
+  yes="$(t au.remember.yes)"; no="$(t au.remember.no)"
+  ans="$(_osascript -e "display dialog \"$(_as_escape "$prompt")\" with title \"$(_as_escape "$title")\" buttons {\"$(_as_escape "$no")\", \"$(_as_escape "$yes")\"} default button 2 giving up after 60" 2>/dev/null || true)"
+  case "$ans" in *"button returned:$yes"*) keychain_set "$1" "$2" ;; *) : ;; esac
+}
+
+# Native notification banner (no secret ever passes through here — callers pass
+# only a display label, already sanitized).
+notify() {   # <message>
+  local msg="$1" title
+  title="$(t au.dialog.title)"
+  _osascript -e "display notification \"$(_as_escape "$msg")\" with title \"$(_as_escape "$title")\"" >/dev/null 2>&1 || true
+}
+
+# Generate a throwaway SUDO_ASKPASS helper at a private 0700 path. It contains
+# NO secret: it merely pops a native osascript GUI dialog for the macOS ADMIN
+# password (distinct from the BitLocker passphrase) and prints it to stdout for
+# sudo. Echoes the helper path; caller removes it after use.
+make_askpass_helper() {
+  local dir helper prompt title
+  dir="$(mktemp -d "${TMPDIR:-/tmp}/bltusb-askpass.XXXXXX")" || return 1
+  chmod 700 "$dir"
+  helper="$dir/askpass"
+  prompt="$(t au.admin.prompt)"; title="$(t au.dialog.title)"
+  # The helper runs osascript itself; the prompt/title are our own literals. The
+  # admin password flows osascript -> stdout -> sudo, never into a file or argv.
+  {
+    printf '#!/bin/sh\n'
+    printf 'exec /usr/bin/osascript -e %s\n' \
+      "'display dialog \"${prompt//\"/\\\"}\" default answer \"\" with title \"${title//\"/\\\"}\" with hidden answer with icon caution' -e 'text returned of result'"
+  } > "$helper"
+  chmod 700 "$helper"
+  printf '%s' "$helper"
+}
+
+# Warm the sudo timestamp via a GUI admin dialog so a later `sudo -n` (used by
+# fstype()/run_mount_gui) succeeds without a terminal. Fast path first: if the
+# timestamp is already valid, return silently (no prompt). Otherwise pop the same
+# no-secret askpass helper and validate the timestamp with `sudo -A true`. The
+# admin password never touches a file or argv. Returns non-zero if warming failed
+# (caller treats that as "skip silently" — the mount path then fails closed).
+warm_sudo_gui() {
+  sudo -n true 2>/dev/null && return 0
+  local h; h="$(make_askpass_helper)" || return 1
+  SUDO_ASKPASS="$h" sudo -A true </dev/null >/dev/null 2>&1
+  local rc=$?
+  rm -rf "$(dirname "$h")" 2>/dev/null || true
+  return $rc
+}
+
+# Run `anylinuxfs mount` for the auto-unlock path WITHOUT a controlling
+# terminal. Fast path: `sudo -n` (cached timestamp, silent). On failure, use
+# `sudo -A` with a GUI askpass helper for the ADMIN password. The BitLocker
+# passphrase (arg 1) still travels only via the ALFS_PASSPHRASE-scoped
+# --preserve-env mechanism, never in argv or AppleScript text. Args after the
+# passphrase are the mount options + device.
+run_mount_gui() {
+  local pass="$1"; shift
+  local rc=0
+  if [[ -n "$pass" ]]; then
+    if ALFS_PASSPHRASE="$pass" sudo -n --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "$@" </dev/null >/dev/null 2>&1; then
+      return 0
+    fi
+    local helper; helper="$(make_askpass_helper)" || return 1
+    ALFS_PASSPHRASE="$pass" SUDO_ASKPASS="$helper" sudo -A --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "$@" </dev/null >/dev/null 2>&1 || rc=$?
+    rm -rf "$(dirname "$helper")" 2>/dev/null || true
+    return "$rc"
+  else
+    if sudo -n anylinuxfs mount "$@" </dev/null >/dev/null 2>&1; then
+      return 0
+    fi
+    local helper; helper="$(make_askpass_helper)" || return 1
+    SUDO_ASKPASS="$helper" sudo -A anylinuxfs mount "$@" </dev/null >/dev/null 2>&1 || rc=$?
+    rm -rf "$(dirname "$helper")" 2>/dev/null || true
+    return "$rc"
+  fi
+}
+
+# Re-verify a device is still the SAME safe target after the passphrase dialog
+# (TOCTOU guard): identical strong identity AND still an external partition AND
+# not EFI AND not host-mounted. Returns non-zero on any mismatch so the caller
+# aborts without mounting. A blank captured identity is treated as a mismatch
+# (we require a stable identity to re-anchor to).
+_autounlock_reverify() {   # <device> <captured-strong-identity>
+  local dev="$1" id0="$2" id1
+  [[ -n "$id0" ]] || return 1
+  id1="$(strong_device_identity "$dev" 2>/dev/null || true)"
+  [[ "$id1" == "$id0" ]] || return 1
+  device_is_external_partition "$dev" || return 1
+  device_is_efi "$dev" && return 1
+  host_mounted "$dev" && return 1
+  return 0
+}
+
+# Auto-mount ONE freshly-inserted external partition, read-only, no terminal.
+# Fails CLOSED and SILENTLY on anything ambiguous (unknown fs, already mounted,
+# EFI/whole-disk/internal) — no "mount anyway?" dialog on the auto path.
+autounlock_mount() {   # <device>
+  local dev; dev="$(canonical_device "$1")"
+  # Same guards the interactive paths use.
+  [[ "$dev" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || return 0
+  device_is_external_partition "$dev" || return 0
+  device_is_efi "$dev" && return 0
+  # Never double-mount: if any anylinuxfs mount is already live, or macOS still
+  # holds this device, leave it alone (the interactive umount owns teardown).
+  is_mounted && return 0
+  host_mounted "$dev" && return 0
+
+  local fst; fst="$(fstype "$dev")"
+  fs_is_mountable "$fst" || return 0     # unknown fs → silent no-op (fail closed)
+
+  # A display label for dialogs/notifications, sanitized (crafted volume label
+  # must not inject into osascript).
+  local label; label="$(diskutil info "$dev" 2>/dev/null | awk -F': +' '/Volume Name/{print $2; exit}' | sanitize_display || true)"
+  [[ -n "$label" ]] || label="$dev"
+
+  local opts=(-w false)
+  if [[ "$fst" == ext ]]; then opts+=(-o "ro,norecovery"); else opts+=(-o ro); fi
+
+  if [[ "${BLTUSB_AUTOUNLOCK_DRYRUN:-}" == "1" ]]; then
+    printf 'autounlock: would mount %s ro (fs=%s)\n' "$dev" "$fst"
+    return 0
+  fi
+
+  # Capture the device's strong identity NOW, before any (≤120s) dialog. The
+  # passphrase dialog is a long window in which the physical device behind
+  # /dev/diskXsY could be swapped; before we hand this path to the root parser we
+  # re-verify the SAME identity and re-run the cheap guards. On any mismatch we
+  # abort and do NOT mount (fail closed) — a swapped hostile partition must never
+  # reach the mount with credentials collected for the original drive.
+  local id0; id0="$(strong_device_identity "$dev" 2>/dev/null || true)"
+  local rc=0 key qp pp
+  if fs_is_encrypted "$fst"; then
+    key="$(device_key "$dev" 2>/dev/null || true)"
+    qp="$(get_passphrase_quiet "$key" 2>/dev/null || true)"
+    if [[ -n "$qp" ]]; then
+      # Even with no dialog, re-anchor to a stable identity before handing the
+      # device to the root parser (fail closed on blank/changed identity).
+      if ! _autounlock_reverify "$dev" "$id0"; then
+        notify "$(t au.notify.failed "$label")"; return 1
+      fi
+      run_mount_gui "$qp" "${opts[@]}" "$dev" || rc=$?
+    else
+      rc=1
+    fi
+    if [[ $rc -ne 0 ]] && ! is_mounted; then
+      pp="$(gui_prompt_passphrase "$label")" || { notify "$(t au.notify.failed "$label")"; return 1; }
+      # Re-verify device identity across the dialog (TOCTOU): same strong
+      # identity, still an external partition, not EFI, not host-mounted.
+      if ! _autounlock_reverify "$dev" "$id0"; then
+        notify "$(t au.notify.failed "$label")"; return 1
+      fi
+      rc=0; run_mount_gui "$pp" "${opts[@]}" "$dev" || rc=$?
+      [[ $rc -eq 0 ]] && gui_offer_save "$pp" "$key" "$label"
+    fi
+  else
+    # Plain (unencrypted) mountable target — no dialog, but still re-anchor to a
+    # stable identity before the root parser touches it (fail closed).
+    if ! _autounlock_reverify "$dev" "$id0"; then
+      notify "$(t au.notify.failed "$label")"; return 1
+    fi
+    run_mount_gui "" "${opts[@]}" "$dev" || rc=$?
+  fi
+
+  if [[ $rc -eq 0 ]]; then
+    local mp; mp="$(current_mountpoint)"
+    notify "$(t au.notify.mounted "${mp:-$label}")"
+    return 0
+  else
+    notify "$(t au.notify.failed "$label")"
+    return 1
+  fi
+}
+
+# Scan all external partitions and auto-mount the first mountable, non-EFI,
+# non-mounted one. Internal command, hidden from help. Exits 0 even when there
+# is nothing to do (so the daemon keeps running).
+__autounlock_scan() {
+  is_mounted && return 0     # something is already mounted — nothing to do
+  local rows id type fst
+  rows="$(list_partition_rows 2>/dev/null || true)"
+  [[ -n "$rows" ]] || return 0
+  sudo -n -v 2>/dev/null || true   # opportunistically warm sudo (silent)
+  while IFS=$'\t' read -r id _ type; do
+    [[ -n "$id" ]] || continue
+    [[ "$id" =~ ^disk[0-9]+s[0-9]+$ ]] || continue
+    [[ "$type" == EFI* ]] && continue
+    host_mounted "/dev/$id" && continue     # macOS already mounts it → skip
+    # A candidate macOS could NOT mount is the real auto-unlock target (e.g. a
+    # locked BitLocker volume). But `diskutil activity` can fire DiskAppeared
+    # BEFORE macOS finishes auto-mounting a plain FAT/exFAT/NTFS volume, so a
+    # normal USB can briefly look unmounted here. Give macOS a moment and re-check
+    # host_mounted before treating it as a genuine candidate — otherwise a plain
+    # USB would trigger a needless admin prompt. Then warm sudo via the GUI askpass
+    # (fstype() below needs `sudo -n dd`; on a cold timestamp it fails → `unknown`
+    # → skipped, so "insert → prompt → mount" never works cold). Both the settle
+    # and the prompt are skipped on the dryrun / osascript-stub test paths.
+    if [[ -z "${BLTUSB_AUTOUNLOCK_DRYRUN:-}" && -z "${BLTUSB_OSASCRIPT_STUB:-}" ]]; then
+      sleep 2
+      host_mounted "/dev/$id" && continue    # macOS finished mounting it → not a target
+      warm_sudo_gui || true    # best-effort; on failure fstype just fails closed
+    fi
+    fst="$(fstype "/dev/$id" 2>/dev/null || echo unknown)"
+    fs_is_mountable "$fst" || continue      # skip unknown fs silently
+    # Per-device flock so overlapping DiskAppeared events don't double-mount.
+    autounlock_locked "/dev/$id"
+    return 0
+  done <<< "$rows"
+  return 0
+}
+
+# Serialize per-device auto-mounts with a flock, so two DiskAppeared events for
+# the same disk can't race into a double mount.
+autounlock_locked() {   # <device>
+  local dev="$1" keyhash lockdir lock
+  keyhash="$(printf '%s' "$dev" | shasum -a 256 2>/dev/null | cut -c1-16 || true)"
+  [[ -n "$keyhash" ]] || keyhash="${dev//\//_}"
+  lockdir="${TMPDIR:-/tmp}/bltusb-autounlock.$(id -u)"
+  mkdir -p "$lockdir" 2>/dev/null || true
+  chmod 700 "$lockdir" 2>/dev/null || true
+  lock="$lockdir/$keyhash.lock"
+  if command -v flock >/dev/null 2>&1; then
+    (
+      flock -n 9 || exit 0
+      autounlock_mount "$dev"
+    ) 9>"$lock"
+  else
+    # macOS ships no flock(1); use mkdir as an atomic lock instead.
+    local mdlock="$lockdir/$keyhash.mlock"
+    if mkdir "$mdlock" 2>/dev/null; then
+      autounlock_mount "$dev"
+      rmdir "$mdlock" 2>/dev/null || true
+    fi
+  fi
+}
+
+# The resident daemon: stream `diskutil activity` and, on each external-disk
+# DiskAppeared event, run a scan. `diskutil activity` blocks until killed; the
+# LaunchAgent (KeepAlive) restarts it if it ever exits. Internal, hidden.
+__autounlock_daemon() {
+  # A brief scan at startup catches a drive already inserted when we loaded.
+  __autounlock_scan || true
+  # Stream disk-arbitration events. Each ***DiskAppeared line names the disk;
+  # we simply re-scan (the scan re-derives the current external partitions and
+  # applies every guard), so we don't have to parse the exact identifier.
+  diskutil activity 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      *DiskAppeared*) __autounlock_scan || true ;;
+    esac
+  done
+}
+
+# launchctl domain target for the current GUI session.
+_au_domain() { printf 'gui/%s' "$(id -u)"; }
+
+# XML-escape a string for safe interpolation into a plist <string>...</string>.
+# `&` MUST be escaped first (it introduces every other entity), then the angle
+# brackets and the double-quote. Without this a bltusb path containing an `&`,
+# `<`, `>` or `"` would produce a malformed plist that launchd rejects.
+_xml_escape() {
+  local s="$1"
+  s="${s//&/&amp;}"; s="${s//</&lt;}"; s="${s//>/&gt;}"; s="${s//\"/&quot;}"
+  printf '%s' "$s"
+}
+
+autounlock_write_plist() {   # <abs-bltusb-path>
+  local bin; bin="$(_xml_escape "$1")"
+  local label; label="$(_xml_escape "$AUTOUNLOCK_LABEL")"
+  mkdir -p "$(dirname "$AUTOUNLOCK_PLIST")"
+  cat > "$AUTOUNLOCK_PLIST" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${label}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>${bin}</string>
+    <string>__autounlock-daemon</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>LimitLoadToSessionType</key>
+  <string>Aqua</string>
+  <key>StandardOutPath</key>
+  <string>/dev/null</string>
+  <key>StandardErrorPath</key>
+  <string>/dev/null</string>
+</dict>
+</plist>
+EOF
+}
+
+cmd_autounlock() {
+  local sub="${1:-}"; shift || true
+  local a
+  for a in "$@"; do
+    warn "ignoring unknown arg: $a"
+  done
+
+  case "$sub" in
+    install)
+      ensure_installed
+      local via; via="$(autounlock_via)"
+      if [[ "$via" == "brew" ]]; then
+        # Homebrew-managed: delegate the daemon to `brew services` (a per-user
+        # agent — NEVER `sudo brew services`, which would be a root LaunchDaemon).
+        # First deactivate any self-managed agent so we never run two daemons —
+        # and ENFORCE it: refuse to start if it can't be confirmed stopped.
+        _autounlock_stop_self || die "$(t au.dedup.failed)"
+        # Honesty gate mirrors the self path: report success only if the service
+        # actually STARTED — require both a clean `brew services start` exit AND a
+        # `brew services list` line showing bltusb `started` (not error/none).
+        if ! brew services start bltusb >/dev/null 2>&1 \
+           || ! brew services list 2>/dev/null | awk '$1=="bltusb"{print $2}' | grep -q '^started$'; then
+          die "$(t au.brew.failed)"
+        fi
+        AUTOUNLOCK_VIA="brew"
+        AUTOUNLOCK="on"; save_config
+        ok "$(t au.installed)"
+        info "$(t au.brew.installed)"
+        info "${C_DIM}$(t au.status.via): $(t au.via.brew)${C_RESET}"
+      else
+        local bin; bin="$(autounlock_self_path)" || die "$(t au.needbin)"
+        [[ -n "$bin" && -x "$bin" ]] || die "$(t au.needbin)"
+        # First deactivate any Homebrew-managed service so we never run two
+        # daemons — and ENFORCE it: refuse to proceed if it can't be confirmed.
+        _autounlock_stop_brew || die "$(t au.dedup.failed)"
+        # The GUI SUDO_ASKPASS admin prompt is the ONLY sudo path (the unsafe
+        # passwordless-sudoers option was removed).
+        autounlock_write_plist "$bin"
+        # bootout an existing instance first so bootstrap is idempotent.
+        launchctl bootout "$(_au_domain)/${AUTOUNLOCK_LABEL}" >/dev/null 2>&1 || true
+        launchctl bootstrap "$(_au_domain)" "$AUTOUNLOCK_PLIST" >/dev/null 2>&1 || true
+        # Only report success (and flip AUTOUNLOCK=on) if the agent actually loaded
+        # — never falsely claim success when bootstrap silently failed.
+        if ! launchctl print "$(_au_domain)/${AUTOUNLOCK_LABEL}" >/dev/null 2>&1; then
+          die "$(t au.install.failed)"
+        fi
+        AUTOUNLOCK_VIA="self"
+        AUTOUNLOCK="on"; save_config
+        ok "$(t au.installed)"
+        info "${C_DIM}$(t au.status.via): $(t au.via.self)${C_RESET}"
+      fi
+      info "${C_DIM}$(t au.phase0.note)${C_RESET}"
+      ;;
+    uninstall)
+      # Branch on the recorded mechanism, falling back to autounlock_via when the
+      # config never recorded one (e.g. an old config or manual edit).
+      local via="$AUTOUNLOCK_VIA"
+      case "$via" in self|brew) ;; *) via="$(autounlock_via)" ;; esac
+      # Defensively deactivate BOTH mechanisms so a stale record or a self<->brew
+      # transition can never leave the other daemon running. Make the ACTIVE
+      # (recorded) mechanism's failure VISIBLE; the other is best-effort cleanup.
+      if [[ "$via" == "brew" ]]; then
+        _autounlock_stop_brew || warn "$(t au.brew.stopfail)"
+        _autounlock_stop_self || true    # defensive best-effort on the inactive one
+      else
+        _autounlock_stop_self || warn "$(t au.self.stopfail)"
+        _autounlock_stop_brew || true    # defensive best-effort on the inactive one
+      fi
+      # Defensive cleanup: remove any legacy passwordless-root rule dropped by a
+      # prior build. A leftover ROOT rule must never be hidden — make failure
+      # VISIBLE (warn) rather than swallow it with `|| true`.
+      if [[ -f "$AUTOUNLOCK_SUDOERS" ]]; then
+        if ! sudo rm -f "$AUTOUNLOCK_SUDOERS" 2>/dev/null; then
+          warn "$(t au.legacy.sudoers "$AUTOUNLOCK_SUDOERS" "$AUTOUNLOCK_SUDOERS")"
+        fi
+      fi
+      AUTOUNLOCK="off"; save_config
+      ok "$(t au.uninstalled)"
+      ;;
+    status|"")
+      step "$(t au.status.header)"
+      local present state loaded args via
+      via="$AUTOUNLOCK_VIA"; case "$via" in self|brew) ;; *) via="$(autounlock_via)" ;; esac
+      if [[ "$AUTOUNLOCK" == "on" ]]; then state="$(t au.status.on)"; else state="$(t au.status.off)"; fi
+      printf '  %-18s: %s\n' "$(t au.status.state)" "$state"
+      if [[ "$via" == "brew" ]]; then
+        printf '  %-18s: %s\n' "$(t au.status.via)" "$(t au.via.brew)"
+        # Loaded state comes from `brew services list` (started/stopped/error).
+        if brew services list 2>/dev/null | awk '$1=="bltusb"{print $2}' | grep -q '^started$'; then loaded="$(t au.status.yes)"; else loaded="$(t au.status.no)"; fi
+        printf '  %-18s: %s\n' "$(t au.status.loaded)" "$loaded"
+      else
+        printf '  %-18s: %s\n' "$(t au.status.via)" "$(t au.via.self)"
+        if [[ -f "$AUTOUNLOCK_PLIST" ]]; then present="$(t au.status.present)"; else present="$(t au.status.absent)"; fi
+        printf '  %-18s: %s %s\n' "$(t au.status.plist)" "$present" "${C_DIM}${AUTOUNLOCK_PLIST}${C_RESET}"
+        if [[ -f "$AUTOUNLOCK_PLIST" ]]; then
+          # Show ProgramArguments so tampering is visible.
+          args="$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments' "$AUTOUNLOCK_PLIST" 2>/dev/null | tr '\n' ' ' | sanitize_display || true)"
+          [[ -n "$args" ]] || args="$(grep -A4 ProgramArguments "$AUTOUNLOCK_PLIST" 2>/dev/null | grep '<string>' | sed -E 's/.*<string>(.*)<\/string>.*/\1/' | tr '\n' ' ' | sanitize_display || true)"
+          printf '  %-18s: %s\n' "$(t au.status.args)" "$args"
+        fi
+        if launchctl print "$(_au_domain)/${AUTOUNLOCK_LABEL}" >/dev/null 2>&1; then loaded="$(t au.status.yes)"; else loaded="$(t au.status.no)"; fi
+        printf '  %-18s: %s\n' "$(t au.status.loaded)" "$loaded"
+      fi
+      echo
+      info "${C_DIM}$(t au.phase0.note)${C_RESET}"
+      ;;
+    *) die "$(t au.usage)" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # Command: lang
 # ---------------------------------------------------------------------------
 cmd_lang() {
@@ -1125,8 +1718,17 @@ ${C_BOLD}Config & install${C_RESET}
   ${C_CYN}install${C_RESET}                           Install anylinuxfs (brew tap+trust+install)
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] Show/change configuration
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]       Forget a remembered drive password
+  ${C_CYN}autounlock${C_RESET} [install|uninstall|status] Auto-mount drives (ro) on insert (personal-dev)
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]        Switch menu language (auto = follow system)
   ${C_CYN}version${C_RESET} / help                    Version / this help
+
+${C_BOLD}Auto-unlock${C_RESET}  ${C_CYN}bltusb autounlock install${C_RESET} runs a per-user agent that auto-mounts an
+             external drive ${C_BOLD}read-only${C_RESET} on insert (Keychain/env password first, else a GUI
+             prompt). Root is obtained via a native macOS admin-password dialog (SUDO_ASKPASS).
+             When bltusb is Homebrew-installed this delegates to ${C_CYN}brew services${C_RESET} automatically
+             (equivalently: ${C_CYN}brew services start bltusb${C_RESET} — a per-user agent, ${C_BOLD}no sudo${C_RESET}; never
+             ${C_BOLD}sudo brew services${C_RESET}); manual installs use a self-managed LaunchAgent.
+             ${C_BOLD}Personal-dev convenience only${C_RESET} — not for a managed/government fleet.
 
 ${C_BOLD}Passwords${C_RESET}  Encrypted drives ask for a password (or 48-digit recovery key). Each drive is
            remembered separately, opt-in — like Windows' "auto-unlock on this PC". Recovery keys
@@ -1161,8 +1763,16 @@ ${C_BOLD}配置与安装${C_RESET}
   ${C_CYN}install${C_RESET}                         安装 anylinuxfs（brew tap+trust+install）
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] 显示/修改配置
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘记某块盘记住的密码
+  ${C_CYN}autounlock${C_RESET} [install|uninstall|status] 插入即自动只读挂载（个人/开发便利）
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切换菜单语言（auto=跟随系统）
   ${C_CYN}version${C_RESET} / help                  版本 / 本帮助
+
+${C_BOLD}自动解锁${C_RESET}  ${C_CYN}bltusb autounlock install${C_RESET} 会安装一个每用户代理，插入外接盘时自动
+        ${C_BOLD}只读${C_RESET}挂载（先用 Keychain/环境变量密码，否则弹出 GUI 输入框）。root 权限通过
+        原生 macOS 管理员密码框（SUDO_ASKPASS）获取。若 bltusb 是 Homebrew 安装，会自动
+        委托给 ${C_CYN}brew services${C_RESET}（等价于 ${C_CYN}brew services start bltusb${C_RESET} —— 每用户代理，
+        ${C_BOLD}无需 sudo${C_RESET}；切勿 ${C_BOLD}sudo brew services${C_RESET}）；手动安装则用自管 LaunchAgent。
+        ${C_BOLD}仅限个人/开发便利${C_RESET} —— 不适用于受管/政府机群。
 
 ${C_BOLD}密码${C_RESET}  加密盘会问密码（或 48 位恢复密钥）。每块盘各自记忆、可选记住 —— 类似 Windows
       的"在这台电脑上自动解锁"，默认不记；恢复密钥不保存。环境变量 ALFS_PASSPHRASE 可覆盖。
@@ -1196,8 +1806,16 @@ ${C_BOLD}設定與安裝${C_RESET}
   ${C_CYN}install${C_RESET}                         安裝 anylinuxfs（brew tap+trust+install）
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] 顯示/修改設定
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘記某塊磁碟記住的密碼
+  ${C_CYN}autounlock${C_RESET} [install|uninstall|status] 插入即自動唯讀掛載（個人/開發便利）
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切換選單語言（auto=跟隨系統）
   ${C_CYN}version${C_RESET} / help                  版本 / 本說明
+
+${C_BOLD}自動解鎖${C_RESET}  ${C_CYN}bltusb autounlock install${C_RESET} 會安裝一個每使用者代理，插入外接碟時自動
+        ${C_BOLD}唯讀${C_RESET}掛載（先用 Keychain/環境變數密碼，否則彈出 GUI 輸入框）。root 權限透過
+        原生 macOS 管理員密碼框（SUDO_ASKPASS）取得。若 bltusb 是 Homebrew 安裝，會自動
+        委派給 ${C_CYN}brew services${C_RESET}（等價於 ${C_CYN}brew services start bltusb${C_RESET} —— 每使用者代理，
+        ${C_BOLD}無需 sudo${C_RESET}；切勿 ${C_BOLD}sudo brew services${C_RESET}）；手動安裝則用自管 LaunchAgent。
+        ${C_BOLD}僅限個人/開發便利${C_RESET} —— 不適用於受管/政府機群。
 
 ${C_BOLD}密碼${C_RESET}  加密碟會問密碼（或 48 位還原金鑰）。每塊磁碟各自記憶、可選記住 —— 類似 Windows
       的「在這台電腦上自動解鎖」，預設不記；還原金鑰不儲存。環境變數 ALFS_PASSPHRASE 可覆寫。
@@ -1233,6 +1851,9 @@ main() {
     detect)               cmd_detect "$@" ;;
     config|cfg)           cmd_config "$@" ;;
     forget)               cmd_forget "$@" ;;
+    autounlock|au)        cmd_autounlock "$@" ;;
+    __autounlock-daemon)  __autounlock_daemon ;;
+    __autounlock-scan)    __autounlock_scan ;;
     lang|language)        cmd_lang "$@" ;;
     version|-v|--version) printf 'bltusb %s\n' "$VERSION" ;;
     help|-h|--help)       cmd_help ;;

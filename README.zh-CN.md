@@ -83,6 +83,7 @@ bltusb umount          # 用完卸载
 | `bltusb install` | 安装 anylinuxfs |
 | `bltusb config [init\|set-device\|set-mode]` | 显示/修改配置 |
 | `bltusb forget [/dev/diskXsY\|--all]` | 忘记某块盘记住的密码 |
+| `bltusb autounlock [install\|uninstall\|status]` | 插入即自动只读挂载 *（个人/开发便利）* |
 | `bltusb lang [en\|zh-CN\|zh-TW\|auto]` | 切换菜单语言 |
 | `bltusb help` / `version` | 帮助 / 版本 |
 
@@ -112,6 +113,26 @@ BLTUSB_LANG=en bltusb  # 用环境变量临时切换
 
 ```bash
 ALFS_PASSPHRASE='你的密码' bltusb mount ro /dev/diskXsY
+```
+
+## 插入即自动解锁（个人/开发便利）
+
+> ⚠️ **仅限个人 / 开发机。** 这是一个 Phase-0 便利功能，复用你交互式的 `sudo` 和 Keychain。它**不是**生产/SRAA 路径，**绝不可**在受管或政府机群上启用 —— 见 [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md)。
+
+`bltusb autounlock install` 会安装一个**每用户 LaunchAgent**，通过 `diskutil activity` 监听插盘事件；插入外接盘时自动**只读**挂载 —— 类似 Windows 的「在这台电脑上自动解锁」，但覆盖整个流程：
+
+- 复用全部既有安全护栏（仅外接分区、绝不碰 EFI / 整盘 / 内置盘、绝不在 macOS 已挂载之上二次挂载），并**始终只读挂载** —— 永不自动读写。
+- 加密盘先静默尝试这块盘已存的 Keychain 密码（或 `ALFS_PASSPHRASE`）；未命中才弹出原生 GUI 密码框。成功后会（GUI）询问是否记住该卷密码；恢复密钥永不保存。
+- 无终端获取 root：在挂载时弹出**原生 macOS 管理员密码框**（通过 `SUDO_ASKPASS`）—— 与 BitLocker 密码不同。这是**唯一**的 sudo 路径。两个密码都绝不进入命令行、被记录命令的环境变量或临时文件。
+- **运行机制：** 当 bltusb 是 **Homebrew 安装**时，`autounlock install` 会自动委托给 **`brew services`** —— 等价于你自己运行 `brew services start bltusb`（**无需 `sudo`** —— 它是每用户代理；**切勿** `sudo brew services`，那会安装一个 root LaunchDaemon）。手动（非 Homebrew）安装则回退到自管的每用户 **LaunchAgent**。
+
+```bash
+bltusb autounlock install            # 挂载时弹管理员密码框（brew 安装则走 brew services）
+bltusb autounlock status             # 运行机制 + 是否已加载
+bltusb autounlock uninstall          # 停止服务 / 移除 LaunchAgent
+# Homebrew 安装的等价命令（每用户，无需 sudo）：
+brew services start bltusb
+brew services stop bltusb
 ```
 
 ## 说明与注意
