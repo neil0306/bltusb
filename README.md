@@ -117,7 +117,9 @@ ALFS_PASSPHRASE='your-password' bltusb mount ro /dev/diskXsY
 
 ## Auto-unlock on insert (personal-dev convenience)
 
-> ⚠️ **Personal / development machines only.** This is a Phase-0 convenience that reuses your interactive `sudo` and your Keychain. It is **not** the production/SRAA path and must **not** be enabled on a managed or government fleet — see [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md).
+> ⚠️ **Personal / development machines only.** This is a Phase-0 convenience that reuses your interactive `sudo` and your Keychain. It is **not** the production/SRAA path and must **not** be enabled on a managed or government fleet.
+>
+> 📄 **Before enabling, read [`docs/AUTO-UNLOCK-RISK.md`](docs/AUTO-UNLOCK-RISK.md)** — the security risks, what we've hardened, and (for org deployments) what your security owner must sign off on. Full architecture: [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md).
 
 `bltusb autounlock install` sets up a **per-user LaunchAgent** that watches for drive-insert events (`diskutil activity`) and, when you plug in an external drive, mounts it **read-only** automatically — just like Windows' *"Automatically unlock on this PC"*, but for the whole flow:
 

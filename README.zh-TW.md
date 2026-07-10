@@ -117,7 +117,9 @@ ALFS_PASSPHRASE='你的密碼' bltusb mount ro /dev/diskXsY
 
 ## 插入即自動解鎖（個人/開發便利）
 
-> ⚠️ **僅限個人 / 開發機。** 這是一個 Phase-0 便利功能，複用你互動式的 `sudo` 和 Keychain。它**不是**生產/SRAA 路徑，**絕不可**在受管或政府機群上啟用 —— 見 [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md)。
+> ⚠️ **僅限個人 / 開發機。** 這是一個 Phase-0 便利功能，複用你互動式的 `sudo` 和 Keychain。它**不是**生產/SRAA 路徑，**絕不可**在受管或政府機群上啟用。
+>
+> 📄 **啟用前請先閱讀風險說明 [`docs/AUTO-UNLOCK-RISK.md`](docs/AUTO-UNLOCK-RISK.md)** —— 有哪些風險、我們做了哪些防護、以及(組織內部署時)你的安全負責人必須就什麼簽字。完整架構見 [`docs/SRAA-ASSESSMENT.md`](docs/SRAA-ASSESSMENT.md)。
 
 `bltusb autounlock install` 會安裝一個**每使用者 LaunchAgent**，透過 `diskutil activity` 監聽插碟事件；插入外接碟時自動**唯讀**掛載 —— 類似 Windows 的「在這台電腦上自動解鎖」，但涵蓋整個流程：
 
