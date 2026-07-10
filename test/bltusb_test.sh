@@ -184,7 +184,7 @@ smoke() {
     # decode warnings to stderr; the valid bytes around it survive.
     local mal_out mal_err; mal_err="$(mktemp)"
     mal_out="$(printf 'a\377b' | bash "$sanf" 2>"$mal_err")"
-    if [[ -s "$mal_err" ]]; then no "malformed UTF-8 leaked stderr: $(cat "$mal_err" | head -1)"; else ok "malformed UTF-8 is non-fatal, no stderr leak"; fi
+    if [[ -s "$mal_err" ]]; then no "malformed UTF-8 leaked stderr: $(head -1 "$mal_err")"; else ok "malformed UTF-8 is non-fatal, no stderr leak"; fi
     case "$mal_out" in a*b) ok "malformed UTF-8 keeps surrounding valid bytes" ;; *) no "malformed UTF-8 dropped valid bytes (got: $(printf %s "$mal_out" | cat -v))" ;; esac
     rm -f "$mal_err"
   else
