@@ -524,8 +524,10 @@ device_is_efi() {   # <device>
   return 1
 }
 
-# Is the device currently mounted by the macOS host?
-host_mounted() { mount 2>/dev/null | grep -q "^/dev/${1#/dev/} "; }
+# Is the device currently mounted by the macOS host? Exact field compare (awk),
+# not a grep regex: a device string is data, never a pattern — so a name with a
+# regex metacharacter can't make the host-unmount (double-writer) guard misfire.
+host_mounted() { mount 2>/dev/null | awk -v d="/dev/${1#/dev/}" '$1==d{f=1} END{exit !f}'; }
 
 # Release the macOS host mount before anylinuxfs touches the raw device. macOS
 # auto-mounts exFAT/FAT read-WRITE (and NTFS read-only); two writers on one
