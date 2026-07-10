@@ -17,11 +17,16 @@ VERSION="1.3.0"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/bltusb"
 CONFIG_FILE="$CONFIG_DIR/config"
 KEYCHAIN_SERVICE="bltusb-anylinuxfs"
+# Legacy global Keychain account (pre per-device model). No longer consulted on
+# the mount path (that would cross drives); retained only so `forget --all`,
+# which deletes every item under KEYCHAIN_SERVICE, still cleans it up.
+# shellcheck disable=SC2034
 KEYCHAIN_ACCOUNT="passphrase"
 BITLOCKER_SIGNATURE="-FVE-FS-"   # BitLocker volume signature at offset 3
 
 # Config values (overridable by the config file)
 DEVICE=""            # empty = auto-detect each time
+DEVICE_ID=""         # saved drive identity (UUID|label|bytes) to guard against diskN drift
 DEFAULT_MODE="ro"    # read-only by default, safer
 LANG_OVERRIDE=""     # empty = follow system language; else en / zh-CN / zh-TW
 
@@ -81,9 +86,16 @@ t() {
   local en zh_cn zh_tw m
   case "$k" in
     cfg.saved)        en="Config saved to %s"; zh_cn="配置已保存到 %s"; zh_tw="設定已儲存到 %s" ;;
-    pass.prompt)      en="Enter BitLocker password: "; zh_cn="请输入 BitLocker 密码: "; zh_tw="請輸入 BitLocker 密碼: " ;;
+    pass.prompt)      en="Enter BitLocker password (or 48-digit recovery key): "; zh_cn="请输入 BitLocker 密码（或 48 位恢复密钥）: "; zh_tw="請輸入 BitLocker 密碼（或 48 位還原金鑰）: " ;;
     pass.empty)       en="Empty password, cancelled"; zh_cn="密码为空，已取消"; zh_tw="密碼為空，已取消" ;;
-    pass.savekey)     en="Save this password to the Keychain for next time? [Y/n] "; zh_cn="把这个密码存入 Keychain 以后免输？[Y/n] "; zh_tw="將此密碼存入 Keychain 以後免輸入？[Y/n] " ;;
+    pass.savekey)     en="Automatically unlock this drive on this Mac next time? [y/N] "; zh_cn="下次在这台 Mac 上自动解锁这块盘吗？[y/N] "; zh_tw="下次在這台 Mac 上自動解鎖這塊磁碟嗎？[y/N] " ;;
+    pass.savedfail)   en="The saved/env password didn't unlock this drive — enter it below"; zh_cn="已存/环境变量里的密码无法解锁这个盘 —— 请手动重新输入"; zh_tw="已存/環境變數裡的密碼無法解鎖這個磁碟 —— 請手動重新輸入" ;;
+    pass.rknosave)    en="Unlocked with a recovery key — not saved (security). Use the regular password to remember this drive."; zh_cn="用恢复密钥解锁 —— 不保存（安全考虑）。想记住这块盘请改用普通密码解锁。"; zh_tw="用還原金鑰解鎖 —— 不儲存（安全考量）。想記住這塊磁碟請改用普通密碼解鎖。" ;;
+    forget.done)      en="Forgot the saved password for %s"; zh_cn="已忘记 %s 的已存密码"; zh_tw="已忘記 %s 的已存密碼" ;;
+    forget.none)      en="No saved password for %s"; zh_cn="%s 没有已存密码"; zh_tw="%s 沒有已存密碼" ;;
+    forget.allask)    en="Delete ALL remembered drive passwords? [y/N] "; zh_cn="删除所有已记住的盘密码？[y/N] "; zh_tw="刪除所有已記住的磁碟密碼？[y/N] " ;;
+    forget.alldone)   en="Removed all bltusb-saved passwords"; zh_cn="已删除所有 bltusb 保存的密码"; zh_tw="已刪除所有 bltusb 儲存的密碼" ;;
+    forget.usage)     en="Usage: bltusb forget [/dev/diskXsY | --all]"; zh_cn="用法：bltusb forget [/dev/diskXsY | --all]"; zh_tw="用法：bltusb forget [/dev/diskXsY | --all]" ;;
     inst.notfound)    en="anylinuxfs not found"; zh_cn="未检测到 anylinuxfs"; zh_tw="未偵測到 anylinuxfs" ;;
     inst.ask)         en="Install it now? [Y/n] "; zh_cn="现在自动安装吗？[Y/n] "; zh_tw="現在自動安裝嗎？[Y/n] " ;;
     inst.cancelled)   en="Cancelled. Run later: bltusb install"; zh_cn="已取消。可稍后运行：bltusb install"; zh_tw="已取消。可稍後執行：bltusb install" ;;
@@ -124,6 +136,18 @@ t() {
     det.noconfirm)    en="No mountable filesystem found (maybe insufficient permission; try: sudo bltusb detect)"; zh_cn="未发现可挂载的文件系统（可能权限不足，试试 sudo bltusb detect）"; zh_tw="未發現可掛載的檔案系統（可能權限不足，試試 sudo bltusb detect）" ;;
     fs.encrypted)     en="encrypted"; zh_cn="加密"; zh_tw="加密" ;;
     mnt.noenc)        en="Detected %s (unencrypted) — no password needed"; zh_cn="检测到 %s（未加密）—— 无需密码"; zh_tw="偵測到 %s（未加密）—— 無需密碼" ;;
+    mnt.unknownfs)    en="Unrecognized filesystem (%s) — bltusb can't confirm it is safe to mount"; zh_cn="无法识别的文件系统（%s）—— bltusb 无法确认可安全挂载"; zh_tw="無法辨識的檔案系統（%s）—— bltusb 無法確認可安全掛載" ;;
+    mnt.unknownask)   en="Mount it anyway? [y/N] "; zh_cn="仍要挂载吗？[y/N] "; zh_tw="仍要掛載嗎？[y/N] " ;;
+    mnt.cancelled2)   en="Cancelled"; zh_cn="已取消"; zh_tw="已取消" ;;
+    host.unmounting)  en="Releasing the macOS mount of %s first (avoids two writers on one filesystem)"; zh_cn="先释放 macOS 对 %s 的挂载（避免同一文件系统被两个写入者损坏）"; zh_tw="先釋放 macOS 對 %s 的掛載（避免同一檔案系統被兩個寫入者損壞）" ;;
+    host.busy)        en="%s is still mounted by macOS — refusing to continue (avoids two writers / an inconsistent read). Close apps using it and eject it in Finder, then retry."; zh_cn="%s 仍被 macOS 挂载 —— 拒绝继续（避免两个写入者 / 读到不一致的数据）。请关闭正在使用它的程序并在 Finder 里推出后重试。"; zh_tw="%s 仍被 macOS 掛載 —— 拒絕繼續（避免兩個寫入者 / 讀到不一致的資料）。請關閉正在使用它的程式並在 Finder 裡退出後重試。" ;;
+    host.busyforce)   en="Tip: if it stays busy, quit Finder/Spotlight or force-eject in Disk Utility. bltusb will not force-unmount for you (a forced unmount can drop unsaved writes)."; zh_cn="提示：若一直忙碌，请退出 Finder/Spotlight 或在磁盘工具里强制退出。bltusb 不会替你强制卸载（强制卸载可能丢失未写完的数据）。"; zh_tw="提示：若一直忙碌，請退出 Finder/Spotlight 或在磁碟工具裡強制退出。bltusb 不會替你強制卸載（強制卸載可能遺失未寫完的資料）。" ;;
+    dev.mismatch)     en="Configured device %s no longer matches the saved drive identity — a different disk may hold this number now. Re-run 'bltusb config set-device' or pass the device explicitly."; zh_cn="固定设备 %s 与已保存的盘身份不符 —— 现在这个编号可能是另一块盘。请重跑 'bltusb config set-device' 或挂载时显式指定设备。"; zh_tw="固定裝置 %s 與已儲存的磁碟身分不符 —— 現在這個編號可能是另一塊磁碟。請重跑 'bltusb config set-device' 或掛載時明確指定裝置。" ;;
+    dev.noid)         en="Configured device %s has no saved identity — refusing to use it (a replug could point this number at a different disk). Re-run 'bltusb config set-device' to re-pin it, or pass the device explicitly."; zh_cn="固定设备 %s 没有已保存的盘身份 —— 拒绝使用（重新插拔可能让这个编号指向另一块盘）。请重跑 'bltusb config set-device' 重新固定，或挂载时显式指定设备。"; zh_tw="固定裝置 %s 沒有已儲存的磁碟身分 —— 拒絕使用（重新插拔可能讓這個編號指向另一塊磁碟）。請重跑 'bltusb config set-device' 重新固定，或掛載時明確指定裝置。" ;;
+    dev.recompfail)   en="Cannot recompute the identity of %s (diskutil failed / no permission) — refusing to use the pinned device. Pass it explicitly, or re-run 'bltusb config set-device'."; zh_cn="无法重新计算 %s 的盘身份（diskutil 失败/无权限）—— 拒绝使用固定设备。请显式指定设备，或重跑 'bltusb config set-device'。"; zh_tw="無法重新計算 %s 的磁碟身分（diskutil 失敗/無權限）—— 拒絕使用固定裝置。請顯式指定裝置，或重跑 'bltusb config set-device'。" ;;
+    dev.weakid)       en="Could not derive a strong identity (Volume/Partition UUID or boot-sector fingerprint) for %s — refusing to pin it. Ensure the drive is attached and retry (a Partition/Volume UUID may need the drive unlocked/probed first)."; zh_cn="无法为 %s 得到足够可靠的盘身份（卷/分区 UUID 或引导扇区指纹）—— 拒绝固定。请确认盘已连接后重试（获取分区/卷 UUID 可能需要先解锁/探测该盘）。"; zh_tw="無法為 %s 取得足夠可靠的磁碟身分（磁碟區/分割區 UUID 或開機磁區指紋）—— 拒絕固定。請確認磁碟已連接後重試（取得分割區/磁碟區 UUID 可能需要先解鎖/探測該磁碟）。" ;;
+    pass.envnote)     en="Using the password from the ALFS_PASSPHRASE environment variable"; zh_cn="正在使用环境变量 ALFS_PASSPHRASE 里的密码"; zh_tw="正在使用環境變數 ALFS_PASSPHRASE 裡的密碼" ;;
+    umt.saferemove)   en="You can now safely unplug the drive"; zh_cn="现在可以安全拔出 U 盘"; zh_tw="現在可以安全拔出隨身碟" ;;
     open.done)        en="Opened in Finder"; zh_cn="已在 Finder 打开"; zh_tw="已在 Finder 開啟" ;;
     cfg.header)       en="Current configuration"; zh_cn="当前配置"; zh_tw="目前設定" ;;
     cfg.file)         en="Config file"; zh_cn="配置文件"; zh_tw="設定檔" ;;
@@ -132,6 +156,7 @@ t() {
     cfg.lang)         en="Language"; zh_cn="语言"; zh_tw="語言" ;;
     cfg.password)     en="Password"; zh_cn="密码"; zh_tw="密碼" ;;
     cfg.pass.set)     en="stored in Keychain"; zh_cn="已存入 Keychain"; zh_tw="已存入 Keychain" ;;
+    cfg.pass.perdrive) en="stored per drive (opt-in on mount; 'bltusb forget' to remove)"; zh_cn="按盘存储（挂载时可选记住；'bltusb forget' 删除）"; zh_tw="按磁碟儲存（掛載時可選記住；'bltusb forget' 刪除）" ;;
     cfg.pass.unset)   en="not set"; zh_cn="未设置"; zh_tw="未設定" ;;
     cfg.auto)         en="(auto-detect)"; zh_cn="（自动识别）"; zh_tw="（自動辨識）" ;;
     cfg.pwprompt)     en="Enter BitLocker password: "; zh_cn="输入 BitLocker 密码: "; zh_tw="輸入 BitLocker 密碼: " ;;
@@ -193,6 +218,7 @@ load_config() {
     val="${val%\"}"; val="${val#\"}"   # strip one layer of surrounding quotes
     case "$key" in
       DEVICE)        DEVICE="$val" ;;
+      DEVICE_ID)     DEVICE_ID="$val" ;;
       DEFAULT_MODE)  DEFAULT_MODE="$val" ;;
       LANG_OVERRIDE) LANG_OVERRIDE="$val" ;;
     esac
@@ -210,10 +236,13 @@ save_config() {
   mkdir -p "$CONFIG_DIR"
   cat > "$CONFIG_FILE" <<EOF
 # bltusb config — generated by \`bltusb config\` / \`bltusb lang\`, editable by hand
-# DEVICE        : target partition, e.g. /dev/disk4s1; empty = auto-detect BitLocker volume
+# DEVICE        : target partition, e.g. /dev/disk4s1; empty = auto-detect
+# DEVICE_ID     : saved drive identity (UUID|label|bytes) — verified before use so a
+#                 replug that shifts diskN numbers can't make bltusb touch a different disk
 # DEFAULT_MODE  : default mount mode, ro (read-only, recommended) or rw (read-write)
 # LANG_OVERRIDE : menu language, empty = follow system; en / zh-CN / zh-TW
 DEVICE="${DEVICE}"
+DEVICE_ID="${DEVICE_ID}"
 DEFAULT_MODE="${DEFAULT_MODE}"
 LANG_OVERRIDE="${LANG_OVERRIDE}"
 EOF
@@ -221,43 +250,100 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# Password (stored in the macOS Keychain)
+# Password (stored PER DRIVE in the macOS Keychain)
 # ---------------------------------------------------------------------------
-keychain_get() {
-  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w 2>/dev/null || true
+# Each encrypted volume gets its own Keychain item keyed by a stable per-volume
+# identity, so N drives with different passwords never overwrite each other.
+# keychain_* take the account (device key) as an argument.
+keychain_get() {   # <account>
+  security find-generic-password -s "$KEYCHAIN_SERVICE" -a "$1" -w 2>/dev/null || true
 }
-keychain_set() {
-  security add-generic-password -U -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" -w "$1" >/dev/null
+keychain_set() {   # <password> <account>
+  # Feed the password on stdin instead of on argv: `-w` with NO value makes
+  # `security` read the secret interactively, so the plaintext never appears in
+  # the process argv where a concurrent `ps` could read it. The interactive form
+  # prompts for the password twice (enter + confirm), so send it on two lines.
+  printf '%s\n%s\n' "$1" "$1" \
+    | security add-generic-password -U -s "$KEYCHAIN_SERVICE" -a "$2" -w >/dev/null 2>&1
 }
-keychain_del() {
-  security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$KEYCHAIN_ACCOUNT" >/dev/null 2>&1 || true
+keychain_del() {   # <account>
+  security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$1" >/dev/null 2>&1 || true
 }
 
-# Password resolution order: env ALFS_PASSPHRASE > Keychain > interactive.
-# If prompted interactively, offer to remember it in the Keychain.
-get_passphrase() {
+# A stable Keychain account for a specific volume. GPT partitions have a
+# Partition UUID; MBR/BitLocker-To-Go drives don't, so fall back to a
+# fingerprint of the boot sector (contains the BitLocker volume GUID; stable
+# across replug, changes only on re-encryption — which is the desired reset).
+device_key() {
+  local dev="$1" uuid tmp n fp
+  uuid="$(diskutil info "$dev" 2>/dev/null | awk -F': +' '/Partition UUID/{print $2; exit}')"
+  if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"; return 0; fi
+  # No UUID — fall back to a boot-sector fingerprint. Read the raw sector to a
+  # temp file (NOT a shell variable: the sector has NUL bytes, which command
+  # substitution strips) and require EXACTLY 512 bytes before hashing. A cold
+  # `sudo -n` (or a short read) yields zero bytes, whose sha256 is the well-known
+  # empty-string constant (e3b0c442...). Hashing that would mint a non-empty but
+  # bogus, shared key that collides across every drive whose read failed —
+  # breaking per-volume identity and silently no-op'ing `forget`. Emit nothing
+  # (return 1) so callers that test `[[ -n "$key" ]]` correctly treat a failed
+  # read as "no stable identity".
+  tmp="$(mktemp -t bltusb.sector 2>/dev/null)" || return 1
+  sudo -n dd if="/dev/r${dev#/dev/}" bs=512 count=1 of="$tmp" 2>/dev/null || true
+  n="$(wc -c < "$tmp" 2>/dev/null | tr -d ' ')"
+  if [[ "$n" != "512" ]]; then rm -f "$tmp"; return 1; fi
+  fp="$(shasum -a 256 < "$tmp" 2>/dev/null | cut -c1-32)"
+  rm -f "$tmp"
+  [[ -n "$fp" ]] || return 1
+  printf 'fp:%s' "$fp"
+}
+
+# 48-digit BitLocker recovery key (8 groups of 6 digits)? Accept both the
+# hyphenated form (######-######-…) and 48 contiguous digits with no
+# separators — the prompt tells users to enter a "48-digit recovery key", so a
+# pasted un-hyphenated key must be recognized too and never offered for saving.
+is_recovery_key() { [[ "$1" =~ ^[0-9]{6}(-[0-9]{6}){7}$ || "$1" =~ ^[0-9]{48}$ ]]; }
+
+# Non-interactive password for THIS volume only: env ALFS_PASSPHRASE > this
+# drive's own Keychain item. The legacy global item is intentionally NOT
+# consulted here — it belongs to a different (or unknown) drive and auto-trying
+# it against the current volume would violate the per-volume password model
+# (and could silently auto-unlock a different reused-password drive). Never
+# returns another drive's secret. Arg 1 = device key (may be empty).
+# The password is printed to stdout (captured by the caller); any human-facing
+# note goes to stderr so it never contaminates the returned secret.
+get_passphrase_quiet() {   # <device_key>
   if [[ -n "${ALFS_PASSPHRASE:-}" ]]; then
+    info "${C_DIM}$(t pass.envnote)${C_RESET}" >&2
     printf '%s' "$ALFS_PASSPHRASE"; return 0
   fi
-  local p; p="$(keychain_get)"
-  if [[ -n "$p" ]]; then
-    printf '%s' "$p"; return 0
-  fi
+  local p=""
+  [[ -n "$1" ]] && p="$(keychain_get "$1")"
+  # Migration fallback: older versions stored ONE global item. Consult it only as
+  # a last resort (this drive has no per-device item yet) so existing users keep
+  # working seamlessly after upgrade — first unlock then saves a per-device item.
+  # Not a cross-drive leak: anylinuxfs is a local decryptor, and a value that
+  # doesn't fit this drive simply falls through to the re-prompt path.
+  [[ -z "$p" ]] && p="$(keychain_get "$KEYCHAIN_ACCOUNT")"
+  printf '%s' "$p"
+}
+
+# Prompt for the passphrase (or recovery key). Does NOT save — saving is offered
+# separately, only after a successful mount (opt-in).
+prompt_passphrase_only() {
   printf '%s' "${C_CYN}$(t pass.prompt)${C_RESET}" >&2
   local pw; read -rs pw; printf '\n' >&2
   [[ -n "$pw" ]] || die "$(t pass.empty)"
-  printf '%s' "${C_CYN}$(t pass.savekey)${C_RESET}" >&2
-  local ans; read -r ans
-  case "${ans:-Y}" in [nN]*) : ;; *) keychain_set "$pw" ;; esac
   printf '%s' "$pw"
 }
 
-# Like get_passphrase but never prompts — returns a stored password or nothing.
-# Used for filesystems we couldn't classify: if it turns out to be encrypted a
-# stored password unlocks it; if it's plain, anylinuxfs ignores the value.
-get_passphrase_quiet() {
-  if [[ -n "${ALFS_PASSPHRASE:-}" ]]; then printf '%s' "$ALFS_PASSPHRASE"; return 0; fi
-  keychain_get
+# After a successful unlock, offer to remember THIS drive's password (default No).
+# Recovery keys are never stored. Needs a stable device key.
+offer_save() {   # <password> <device_key>
+  [[ -n "$2" ]] || return 0
+  if is_recovery_key "$1"; then info "${C_DIM}$(t pass.rknosave)${C_RESET}"; return 0; fi
+  printf '%s' "${C_CYN}$(t pass.savekey)${C_RESET}" >&2
+  local ans; read -r ans
+  case "${ans:-N}" in [yY]*) keychain_set "$1" "$2" && ok "$(t cfg.pwsaved)" ;; *) : ;; esac
 }
 
 # ---------------------------------------------------------------------------
@@ -357,6 +443,77 @@ list_partition_rows() {
     }'
 }
 
+# A stable-ish identity for a device: "UUID|label|bytes". Used to detect when a
+# saved diskN number now points at a *different* physical drive (replug drift).
+device_identity() {
+  local dev="$1" di uuid label bytes
+  di="$(diskutil info "$dev" 2>/dev/null)" || return 1
+  [[ -n "$di" ]] || return 1
+  uuid="$(printf '%s\n' "$di" | awk -F': +' '/Volume UUID/{print $2; exit}')"
+  [[ -n "$uuid" ]] || uuid="$(printf '%s\n' "$di" | awk -F': +' '/Partition UUID/{print $2; exit}')"
+  label="$(printf '%s\n' "$di" | awk -F': +' '/Volume Name/{print $2; exit}')"
+  bytes="$(printf '%s\n' "$di" | grep -oE '\([0-9]+ Bytes' | head -1 | grep -oE '[0-9]+')"
+  printf '%s|%s|%s' "$uuid" "$label" "$bytes"
+}
+
+# A STRONG identity for pinning a device, printed on success. Requires a real
+# discriminator so it can never collapse to a label+size-only string that
+# collides across same-size external drives:
+#   - a Volume/Partition UUID (first field of device_identity is non-empty), OR
+#   - a boot-sector fingerprint (device_key: the BitLocker volume GUID / boot
+#     sector hash) when no UUID is exposed (MBR / BitLocker-To-Go drives).
+# Returns non-zero (printing nothing) if neither can be derived, so callers can
+# refuse to persist a weak/empty identity.
+strong_device_identity() {   # <device>
+  local dev="$1" id uuid key
+  id="$(device_identity "$dev" 2>/dev/null || true)"
+  uuid="${id%%|*}"
+  if [[ -n "$uuid" ]]; then printf '%s' "$id"; return 0; fi
+  # No UUID exposed — anchor the identity to a boot-sector fingerprint instead.
+  key="$(device_key "$dev" 2>/dev/null || true)"
+  if [[ -n "$key" ]]; then printf '%s|%s' "$key" "$id"; return 0; fi
+  return 1
+}
+
+# Canonicalize a device path to /dev/diskXsY form for consistent comparisons:
+# strip a leading raw-device 'r' (/dev/rdiskXsY -> /dev/diskXsY) and any trailing
+# slash. Whole-disk paths (/dev/diskX) are returned as-is; validate_cli_device
+# rejects them. Keeping this separate means the host_mounted() double-mount check
+# below can't be evaded by a path variant (rdisk / whole-disk).
+canonical_device() {
+  local d="${1#/dev/}"
+  d="${d#r}"          # rdiskXsY -> diskXsY (raw char device alias)
+  printf '/dev/%s' "$d"
+}
+
+# Is <device> one of the external physical partitions we enumerate for
+# auto-detect? Returns 0/1 only (no output, no die) so callers control the error.
+# This is what stops an internal disk or a stale/whole-disk path from an explicit
+# CLI arg flowing straight into (rw) mount.
+device_is_external_partition() {   # <device>
+  local part="${1#/dev/}" ext p
+  ext="$(list_external_partitions)"
+  while IFS= read -r p; do [[ "$p" == "$part" ]] && return 0; done <<< "$ext"
+  return 1
+}
+
+# Is the device currently mounted by the macOS host?
+host_mounted() { mount 2>/dev/null | grep -q "^/dev/${1#/dev/} "; }
+
+# Release the macOS host mount before anylinuxfs touches the raw device. macOS
+# auto-mounts exFAT/FAT read-WRITE (and NTFS read-only); two writers on one
+# filesystem corrupts it. Only a NORMAL unmount is attempted — never a forced
+# one: a forced unmount can drop another app's buffered writes and lose user
+# data. If the volume stays busy the caller fails closed and asks the user to
+# eject it themselves. Returns non-zero if the device is still host-mounted.
+release_host_mount() {
+  local dev="$1"
+  host_mounted "$dev" || return 0
+  info "$(t host.unmounting "$dev")"
+  diskutil unmount "$dev" >/dev/null 2>&1 || true
+  ! host_mounted "$dev"
+}
+
 # Auto-detect a mountable partition: prefer an encrypted one, else any
 # filesystem anylinuxfs can mount. EFI system partitions are never candidates.
 autodetect_device() {
@@ -380,20 +537,63 @@ autodetect_device() {
   if [[ ${#mnt[@]} -eq 1 ]]; then printf '%s' "${mnt[0]}"; return 0; fi
   if [[ ${#mnt[@]} -gt 1 ]]; then err "$(t det.multi "${mnt[*]}")"; err "$(t det.hintcfg)"; return 1; fi
 
-  if [[ ${#all[@]} -eq 1 ]]; then
-    warn "$(t det.onlyone "${all[0]}")"
-    printf '%s' "${all[0]}"; return 0
-  fi
+  # No recognized filesystem. Do NOT auto-mount an unclassified device — make
+  # the user name it explicitly (perform_mount will then ask for confirmation).
   err "$(t det.cantauto "${all[*]:-N/A}")"
   err "$(t det.hintcfg2)"
   return 1
 }
 
-# Resolve the device to use: CLI arg > config DEVICE > auto-detect
+# Resolve the device to use: CLI arg > config DEVICE (identity-checked) > auto-detect
+# Arg 2 (mode) is used to require a strong identity before an explicit rw mount.
 resolve_device() {
-  local arg="${1:-}"
-  if [[ -n "$arg" ]]; then printf '%s' "$arg"; return 0; fi
-  if [[ -n "$DEVICE" ]]; then printf '%s' "$DEVICE"; return 0; fi
+  local arg="${1:-}" mode="${2:-ro}"
+  if [[ -n "$arg" ]]; then
+    # An explicit CLI device must clear the same bar as auto-detect/config —
+    # never trust a raw path straight into (rw) mount. Reject whole-disk/internal
+    # paths, require an external partition, and canonicalize (strip a raw-device
+    # 'r') so the later host_mounted() double-mount check can't be dodged by a
+    # /dev/rdiskXsY variant. For rw, additionally require a strong identity so a
+    # stale disk number can't silently point a writer at a different drive.
+    local dev
+    dev="$(canonical_device "$arg")"
+    # Must be an external PARTITION (diskXsY), never a whole disk (diskX),
+    # internal disk, or raw path variant. Canonicalization above already stripped
+    # a leading raw-device 'r' so the later host_mounted() double-mount check
+    # can't be dodged by a /dev/rdiskXsY variant.
+    [[ "$dev" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || die "$(t cfg.deverr)"
+    device_is_external_partition "$dev" || die "$(t det.cantauto "$dev")"
+    if [[ "$mode" == "rw" ]]; then
+      # For rw, require a strong identity so a stale disk number can't silently
+      # point a writer at a different drive.
+      strong_device_identity "$dev" >/dev/null 2>&1 || die "$(t dev.weakid "$dev")"
+    fi
+    printf '%s' "$dev"; return 0
+  fi
+  if [[ -n "$DEVICE" ]]; then
+    # Guard against diskN drift, FAIL CLOSED: a pinned DEVICE is only trusted
+    # when we have a saved identity AND can recompute it AND it still matches.
+    # A legacy config with DEVICE but no DEVICE_ID, or a diskutil read that
+    # fails to recompute, must refuse — never silently operate on whatever disk
+    # happens to occupy this path (that risks a rw mount hitting the wrong drive).
+    if [[ -z "$DEVICE_ID" ]]; then
+      die "$(t dev.noid "$DEVICE")"
+    fi
+    # Same external-partition guard applied to explicit CLI devices (above): a
+    # pinned DEVICE must still be an external partition at use time, so an
+    # internal / non-external / EFI partition can never be unmounted and (rw)
+    # mounted by bltusb even when its identity matches.
+    device_is_external_partition "$DEVICE" || die "$(t det.cantauto "$DEVICE")"
+    local cur
+    cur="$(strong_device_identity "$DEVICE" 2>/dev/null || true)"
+    if [[ -z "$cur" ]]; then
+      die "$(t dev.recompfail "$DEVICE")"
+    fi
+    if [[ "$cur" != "$DEVICE_ID" ]]; then
+      die "$(t dev.mismatch "$DEVICE")"
+    fi
+    printf '%s' "$DEVICE"; return 0
+  fi
   autodetect_device
 }
 
@@ -405,37 +605,89 @@ current_mountpoint() {
 }
 is_mounted() { [[ -n "$(current_mountpoint)" ]]; }
 
+# Run `anylinuxfs mount`. The passphrase (arg 1) is handed to anylinuxfs via the
+# ALFS_PASSPHRASE environment variable — anylinuxfs exposes no stdin/fd channel
+# for the secret, so the env var is the only supported mechanism. Keeping it out
+# of argv means it never shows in a plain `ps`; note that an env-aware listing
+# (`ps -E`, or reading the child's environ) can still observe it for the brief
+# lifetime of the mount subprocess. We therefore (a) scope the variable to just
+# this one command (an inline `VAR=val cmd` assignment, never an exported/global
+# that would leak into every later child), (b) pass it only when a passphrase is
+# actually needed, and (c) never echo the value to any log — the info() lines
+# print `--preserve-env=ALFS_PASSPHRASE` but never the passphrase itself.
+# Remaining args are the mount options + dev.
+run_mount() {
+  local pass="$1"; shift
+  # stdin from /dev/null: the mount must NOT consume our stdin, or it would eat
+  # the answer to the follow-up "remember this drive?" prompt.
+  if [[ -n "$pass" ]]; then
+    ALFS_PASSPHRASE="$pass" sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "$@" </dev/null
+  else
+    sudo anylinuxfs mount "$@" </dev/null
+  fi
+}
+
 # perform_mount <device> <ro|rw> <do_open:true|false>
 perform_mount() {
   local dev="$1" mode="$2" do_open="${3:-false}"
 
-  sudo -v 2>/dev/null || true                      # prime sudo (mounting needs root anyway)
-  local fst; fst="$(fstype "$dev")"    # so we know whether a passphrase is needed
-  local pass=""
-  if fs_is_encrypted "$fst"; then
-    pass="$(get_passphrase)"                       # definitely encrypted → need it
-  elif fs_is_plain "$fst"; then
-    info "${C_DIM}$(t mnt.noenc "$fst")${C_RESET}" # known plain fs → no password
-  else
-    pass="$(get_passphrase_quiet)"                 # unknown → use a stored one if any
+  sudo -v 2>/dev/null || true          # prime sudo (mounting needs root anyway)
+  local fst; fst="$(fstype "$dev")"
+
+  # Guard #1: never let anylinuxfs touch the raw device while macOS still has the
+  # filesystem mounted. exFAT/FAT are host-mounted read-WRITE (two writers →
+  # corruption); even NTFS/host-read-only mounts mean macOS may flush dirty
+  # metadata (Spotlight, .DS_Store, FAT tables) while anylinuxfs reads the same
+  # structures, yielding a torn/inconsistent view. Fail closed for BOTH rw and
+  # ro rather than proceeding on top of a live host mount.
+  if ! release_host_mount "$dev"; then
+    warn "$(t host.busyforce)"
+    die "$(t host.busy "$dev")"
   fi
 
+  # Read-only options. For ext, add norecovery so a "read-only" mount can't
+  # silently write via journal replay on a dirty volume.
   local opts=(-w false)
-  # Fail closed: only an explicit "rw" gets read-write; anything else is read-only.
-  [[ "$mode" == "rw" ]] || opts+=(-o ro)
+  if [[ "$mode" != "rw" ]]; then
+    if [[ "$fst" == ext ]]; then opts+=(-o "ro,norecovery"); else opts+=(-o ro); fi
+  fi
 
   step "$(t mnt.mounting "$dev" "$mode")"
   [[ "$mode" == "rw" ]] && warn "$(t mnt.rwwarn)"
 
   local rc=0
-  if [[ -n "$pass" ]]; then
-    info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
-    # Pass the passphrase via the environment (not a sudo argv) so it never
-    # shows in `ps`. --preserve-env keeps it across sudo's env reset.
-    ALFS_PASSPHRASE="$pass" sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount "${opts[@]}" "$dev" || rc=$?
-  else
+  if fs_is_encrypted "$fst"; then
+    # Per-drive password: try this volume's own saved password (or env) first;
+    # if it fails — re-encrypted transfer drive, locked/empty Keychain — fall
+    # back to prompting and retry once. On success, offer to remember (opt-in).
+    local key; key="$(device_key "$dev")"
+    local qp; qp="$(get_passphrase_quiet "$key")"
+    if [[ -n "$qp" ]]; then
+      info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
+      run_mount "$qp" "${opts[@]}" "$dev" || rc=$?
+      [[ $rc -ne 0 ]] && warn "$(t pass.savedfail)"
+    else
+      rc=1
+    fi
+    if [[ $rc -ne 0 ]] && ! is_mounted; then
+      local pp; pp="$(prompt_passphrase_only)"
+      info "sudo --preserve-env=ALFS_PASSPHRASE anylinuxfs mount ${opts[*]} ${dev}"
+      rc=0; run_mount "$pp" "${opts[@]}" "$dev" || rc=$?
+      [[ $rc -eq 0 ]] && offer_save "$pp" "$key"
+    fi
+  elif fs_is_plain "$fst"; then
+    info "${C_DIM}$(t mnt.noenc "$fst")${C_RESET}"
     info "sudo anylinuxfs mount ${opts[*]} ${dev}"
-    sudo anylinuxfs mount "${opts[@]}" "$dev" || rc=$?
+    run_mount "" "${opts[@]}" "$dev" || rc=$?
+  else
+    # Guard #5: unrecognized filesystem — never silently mount or auto-send a
+    # stored password; require explicit confirmation.
+    warn "$(t mnt.unknownfs "$fst")"
+    printf '%s' "${C_CYN}$(t mnt.unknownask)${C_RESET}" >&2
+    local uans; read -r uans
+    case "${uans:-N}" in [yY]*) : ;; *) die "$(t mnt.cancelled2)" ;; esac
+    info "sudo anylinuxfs mount ${opts[*]} ${dev}"
+    run_mount "" "${opts[@]}" "$dev" || rc=$?
   fi
 
   if [[ $rc -eq 0 ]]; then
@@ -469,10 +721,14 @@ cmd_auto() {
   local ids=() sizes=() types=() fsts=() rec=0 rec_enc=0 rec_any=0 n=0 id size type fst
   while IFS=$'\t' read -r id size type; do
     [[ -n "$id" ]] || continue
+    # Never make the EFI system partition selectable: like autodetect_device,
+    # exclude it from the list entirely so a user can't accidentally pick a FAT
+    # EFI partition and rw-mount it (that partition must never be user-mounted).
+    [[ "$type" == EFI* ]] && continue
     fst="$(fstype "$id")"
     ids+=("$id"); sizes+=("$size"); types+=("$type"); fsts+=("$fst")
     fs_is_encrypted "$fst" && [[ $rec_enc -eq 0 ]] && rec_enc=$((n+1))
-    if fs_is_mountable "$fst" && [[ $rec_any -eq 0 && "$type" != EFI* ]]; then rec_any=$((n+1)); fi
+    if fs_is_mountable "$fst" && [[ $rec_any -eq 0 ]]; then rec_any=$((n+1)); fi
     n=$((n+1))
   done <<< "$(list_partition_rows)"
 
@@ -545,7 +801,7 @@ cmd_mount() {
     return 0
   fi
 
-  local dev; dev="$(resolve_device "$dev_arg")" || exit 1
+  local dev; dev="$(resolve_device "$dev_arg" "$mode")" || exit 1
   perform_mount "$dev" "$mode" "$do_open" || exit 1
 }
 
@@ -558,8 +814,11 @@ cmd_umount() {
   fi
   local mp; mp="$(current_mountpoint)"
   step "$(t umt.unmounting "$mp")"
-  if sudo anylinuxfs unmount; then
+  sync 2>/dev/null || true            # flush host dirty pages to the VM first
+  # -w waits for the microVM to fully exit (finish flushing to the USB) before returning.
+  if sudo anylinuxfs unmount -w; then
     ok "$(t umt.done)"
+    ok "$(t umt.saferemove)"
   else
     err "$(t umt.fail)"
     exit 1
@@ -625,43 +884,85 @@ cmd_config() {
       printf '  %-9s: %s\n' "$(t cfg.device)" "${DEVICE:-$(t cfg.auto)}"
       printf '  %-9s: %s\n' "$(t cfg.mode)"   "$DEFAULT_MODE"
       printf '  %-9s: %s\n' "$(t cfg.lang)"   "$(lang_name "$BLTUSB_LANG_CODE")"
-      if [[ -n "$(keychain_get)" ]]; then
-        printf '  %-9s: %s\n' "$(t cfg.password)" "${C_GRN}$(t cfg.pass.set)${C_RESET}"
-      else
-        printf '  %-9s: %s\n' "$(t cfg.password)" "${C_YEL}$(t cfg.pass.unset)${C_RESET}"
-      fi
-      ;;
-    set-password|password|passwd)
-      local pw
-      if [[ -n "${1:-}" ]]; then pw="$1"; else
-        printf '%s' "${C_CYN}$(t cfg.pwprompt)${C_RESET}"; read -rs pw; printf '\n'
-      fi
-      [[ -n "$pw" ]] || die "$(t cfg.pwempty)"
-      keychain_set "$pw"; ok "$(t cfg.pwsaved)"
+      printf '  %-9s: %s\n' "$(t cfg.password)" "${C_DIM}$(t cfg.pass.perdrive)${C_RESET}"
       ;;
     set-device|device)
       local d="${1:-}"
       [[ -n "$d" ]] || { printf '%s' "$(t cfg.devprompt)"; read -r d; }
       if [[ -n "$d" && ! "$d" =~ ^/dev/disk[0-9]+s[0-9]+$ ]]; then die "$(t cfg.deverr)"; fi
-      DEVICE="$d"; save_config
+      if [[ -n "$d" ]]; then
+        # Never pin a non-external partition (internal disk / EFI / stale path):
+        # match the guard applied on the explicit-CLI and pinned mount paths so a
+        # dangerous device can't be persisted and later (rw) mounted.
+        device_is_external_partition "$d" || die "$(t det.cantauto "$d")"
+        # Require a STRONG identity (UUID or boot-sector fingerprint) before we
+        # pin a device — never persist an empty or label+size-only identity, or
+        # the drift guard in resolve_device would be silently disabled.
+        DEVICE_ID="$(strong_device_identity "$d" 2>/dev/null || true)"
+        [[ -n "$DEVICE_ID" ]] || die "$(t dev.weakid "$d")"
+      else
+        DEVICE_ID=""   # empty DEVICE = auto-detect each time; no identity to pin
+      fi
+      DEVICE="$d"
+      save_config
       ;;
     set-mode|mode)
       local m="${1:-}"
       case "$m" in ro|rw) DEFAULT_MODE="$m"; save_config ;; *) die "$(t cfg.modeerr)" ;; esac
       ;;
-    clear-password)
-      keychain_del; ok "$(t cfg.pwcleared)"
-      ;;
     init)
       step "$(t cfg.init.header)"
-      printf '%s' "$(t cfg.init.pw)"; local pw; read -rs pw; printf '\n'
-      [[ -n "$pw" ]] && { keychain_set "$pw"; ok "$(t cfg.init.pwsaved)"; }
       printf '%s' "$(t cfg.init.dev)"; read -r DEVICE
+      if [[ -n "$DEVICE" ]]; then
+        if [[ ! "$DEVICE" =~ ^/dev/disk[0-9]+s[0-9]+$ ]]; then die "$(t cfg.deverr)"; fi
+        # Never pin a non-external partition (internal / EFI / stale path):
+        # match the mount-path guard so a dangerous device can't be persisted.
+        device_is_external_partition "$DEVICE" || die "$(t det.cantauto "$DEVICE")"
+        # Require a strong identity to pin the device; abort rather than persist
+        # an empty/weak one that would disable the diskN-drift guard.
+        DEVICE_ID="$(strong_device_identity "$DEVICE" 2>/dev/null || true)"
+        [[ -n "$DEVICE_ID" ]] || die "$(t dev.weakid "$DEVICE")"
+      else
+        DEVICE_ID=""
+      fi
       printf '%s' "$(t cfg.init.mode)"; local m; read -r m
       if [[ "$m" == "rw" ]]; then DEFAULT_MODE="rw"; else DEFAULT_MODE="ro"; fi
       save_config
       ;;
     *) die "$(t cfg.unknownsub "$sub")" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Command: forget — remove a saved per-drive password (opt-in cleanup)
+# ---------------------------------------------------------------------------
+cmd_forget() {
+  local arg="${1:-}"
+  # Prime sudo before device_key: on a cold terminal an MBR/BitLocker-To-Go drive
+  # has no Partition UUID, so device_key falls back to a `sudo -n dd` boot-sector
+  # read. Without a warm sudo timestamp that read fails, device_key now returns
+  # empty, and forget would report "no saved password" while leaving the real
+  # per-device Keychain entry behind. Priming makes the fingerprint reproducible.
+  sudo -v 2>/dev/null || true
+  case "$arg" in
+    --all)
+      printf '%s' "${C_YEL}$(t forget.allask)${C_RESET}" >&2
+      local ans; read -r ans
+      case "${ans:-N}" in
+        [yY]*)
+          while security delete-generic-password -s "$KEYCHAIN_SERVICE" >/dev/null 2>&1; do :; done
+          ok "$(t forget.alldone)"
+          ;;
+        *) info "$(t mnt.cancelled2)" ;;
+      esac
+      ;;
+    /dev/*|disk*)
+      local dev="$arg"; [[ "$arg" == disk* ]] && dev="/dev/$arg"
+      local key; key="$(device_key "$dev")"
+      [[ -n "$key" ]] || die "$(t forget.none "$dev")"
+      if [[ -n "$(keychain_get "$key")" ]]; then keychain_del "$key"; ok "$(t forget.done "$dev")"; else info "$(t forget.none "$dev")"; fi
+      ;;
+    ""|*) die "$(t forget.usage)" ;;
   esac
 }
 
@@ -721,11 +1022,14 @@ ${C_BOLD}Common commands${C_RESET}
 
 ${C_BOLD}Config & install${C_RESET}
   ${C_CYN}install${C_RESET}                           Install anylinuxfs (brew tap+trust+install)
-  ${C_CYN}config${C_RESET} [init|set-password|...]    Show/change configuration
+  ${C_CYN}config${C_RESET} [init|set-device|set-mode] Show/change configuration
+  ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]       Forget a remembered drive password
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]        Switch menu language (auto = follow system)
   ${C_CYN}version${C_RESET} / help                    Version / this help
 
-${C_BOLD}Password order${C_RESET}  env ALFS_PASSPHRASE ${C_DIM}>${C_RESET} Keychain ${C_DIM}>${C_RESET} interactive prompt
+${C_BOLD}Passwords${C_RESET}  Encrypted drives ask for a password (or 48-digit recovery key). Each drive is
+           remembered separately, opt-in — like Windows' "auto-unlock on this PC". Recovery keys
+           are never saved. env ALFS_PASSPHRASE overrides.
 ${C_BOLD}Notes${C_RESET}  Mount/unmount need sudo; read-only by default, use rw only to edit files.
        Menu language auto-detects from the system; override with 'bltusb lang'.
 EOF
@@ -754,11 +1058,13 @@ ${C_BOLD}常用命令${C_RESET}
 
 ${C_BOLD}配置与安装${C_RESET}
   ${C_CYN}install${C_RESET}                         安装 anylinuxfs（brew tap+trust+install）
-  ${C_CYN}config${C_RESET} [init|set-password|...]  显示/修改配置
+  ${C_CYN}config${C_RESET} [init|set-device|set-mode] 显示/修改配置
+  ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘记某块盘记住的密码
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切换菜单语言（auto=跟随系统）
   ${C_CYN}version${C_RESET} / help                  版本 / 本帮助
 
-${C_BOLD}密码来源优先级${C_RESET}  环境变量 ALFS_PASSPHRASE ${C_DIM}>${C_RESET} Keychain ${C_DIM}>${C_RESET} 交互输入
+${C_BOLD}密码${C_RESET}  加密盘会问密码（或 48 位恢复密钥）。每块盘各自记忆、可选记住 —— 类似 Windows
+      的"在这台电脑上自动解锁"，默认不记；恢复密钥不保存。环境变量 ALFS_PASSPHRASE 可覆盖。
 ${C_BOLD}说明${C_RESET}  挂载/卸载需要 sudo；默认只读，改文件时才用 rw。
       菜单语言默认跟随系统，可用 'bltusb lang' 手动切换。
 EOF
@@ -787,11 +1093,13 @@ ${C_BOLD}常用命令${C_RESET}
 
 ${C_BOLD}設定與安裝${C_RESET}
   ${C_CYN}install${C_RESET}                         安裝 anylinuxfs（brew tap+trust+install）
-  ${C_CYN}config${C_RESET} [init|set-password|...]  顯示/修改設定
+  ${C_CYN}config${C_RESET} [init|set-device|set-mode] 顯示/修改設定
+  ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘記某塊磁碟記住的密碼
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切換選單語言（auto=跟隨系統）
   ${C_CYN}version${C_RESET} / help                  版本 / 本說明
 
-${C_BOLD}密碼來源優先序${C_RESET}  環境變數 ALFS_PASSPHRASE ${C_DIM}>${C_RESET} Keychain ${C_DIM}>${C_RESET} 互動輸入
+${C_BOLD}密碼${C_RESET}  加密碟會問密碼（或 48 位還原金鑰）。每塊磁碟各自記憶、可選記住 —— 類似 Windows
+      的「在這台電腦上自動解鎖」，預設不記；還原金鑰不儲存。環境變數 ALFS_PASSPHRASE 可覆寫。
 ${C_BOLD}說明${C_RESET}  掛載/卸載需要 sudo；預設唯讀，改檔案時才用 rw。
       選單語言預設跟隨系統，可用 'bltusb lang' 手動切換。
 EOF
@@ -823,6 +1131,7 @@ main() {
     status|st)            cmd_status "$@" ;;
     detect)               cmd_detect "$@" ;;
     config|cfg)           cmd_config "$@" ;;
+    forget)               cmd_forget "$@" ;;
     lang|language)        cmd_lang "$@" ;;
     version|-v|--version) printf 'bltusb %s\n' "$VERSION" ;;
     help|-h|--help)       cmd_help ;;

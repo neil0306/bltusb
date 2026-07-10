@@ -19,7 +19,10 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="${BLTUSB_BIN:-$HERE/../bltusb}"
 PASS=0; FAIL=0; SKIP=0
 KC_SVC="bltusb-anylinuxfs"; KC_ACC="passphrase"
-FRESH_ORIG=""   # captured Keychain password, restored on exit
+FRESH_ORIG=""     # password to feed during the test (legacy/global slot or env)
+FRESH_DEVKEY=""   # per-device Keychain account used during the fresh-device test
+FRESH_DEVORIG=""  # captured PER-DEVICE password (the one we delete+must restore)
+FRESH_LEGACYORIG="" # captured LEGACY global password (deleted to force the prompt path; restored on exit)
 
 ok()   { echo "  ✓ $*"; PASS=$((PASS+1)); }
 no()   { echo "  ✗ $*"; FAIL=$((FAIL+1)); }
@@ -35,8 +38,34 @@ mp()  { anylinuxfs status 2>/dev/null | grep -oE '/Volumes/[^ ]+' | head -1; }
 wait_mount() { for _ in 1 2 3 4 5 6; do [[ -n "$(mp)" ]] && return 0; sleep 1; done; return 1; }
 # anylinuxfs needs a moment to fully tear down before the next mount.
 settle() { sleep 2; }
-kc_has() { security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w >/dev/null 2>&1; }
-restore_keychain() { [[ -n "$FRESH_ORIG" ]] && security add-generic-password -U -s "$KC_SVC" -a "$KC_ACC" -w "$FRESH_ORIG" >/dev/null 2>&1; }
+kc_has() { security find-generic-password -s "$KC_SVC" -a "$1" -w >/dev/null 2>&1; }
+# Same per-volume key derivation bltusb uses (Partition UUID, else boot-sector fingerprint).
+dev_key() {
+  local d="$1" uuid
+  uuid="$(diskutil info "$d" 2>/dev/null | awk -F': +' '/Partition UUID/{print $2; exit}')"
+  if [[ -n "$uuid" ]]; then printf 'puuid:%s' "$uuid"
+  else printf 'fp:%s' "$(sudo -n dd if="/dev/r${d#/dev/}" bs=512 count=1 2>/dev/null | shasum -a 256 | cut -c1-32)"; fi
+}
+restore_keychain() {
+  # The fresh-device test deletes the user's REAL per-device Keychain item
+  # (FRESH_DEVKEY) to simulate an unseen drive. Under v1.3.1's per-device model
+  # the mount path never consults the legacy global slot, so we must put the
+  # password back under the SAME per-device account we removed — restoring only
+  # the legacy KC_ACC would silently destroy the user's remembered per-drive
+  # password. Prefer the exact per-device value we captured; fall back to the
+  # feed password (FRESH_ORIG) if the per-device slot happened to be empty.
+  if [[ -n "$FRESH_DEVKEY" ]]; then
+    local restore="${FRESH_DEVORIG:-$FRESH_ORIG}"
+    if [[ -n "$restore" ]]; then
+      security add-generic-password -U -s "$KC_SVC" -a "$FRESH_DEVKEY" -w "$restore" >/dev/null 2>&1
+    else
+      security delete-generic-password -s "$KC_SVC" -a "$FRESH_DEVKEY" >/dev/null 2>&1
+    fi
+  fi
+  # Put the legacy global item back if we deleted it (the mount path's migration
+  # fallback reads it), so this opt-in test never destroys the user's password.
+  [[ -n "$FRESH_LEGACYORIG" ]] && security add-generic-password -U -s "$KC_SVC" -a "$KC_ACC" -w "$FRESH_LEGACYORIG" >/dev/null 2>&1
+}
 
 # ---------------------------------------------------------------------------
 # smoke — offline, no diskutil/security/sudo, safe in CI (Linux or macOS)
@@ -93,7 +122,15 @@ hardware() {
   if [[ -z "$dev" ]]; then skip "no BitLocker drive detected — plug one in to run this suite"; return; fi
   ok "BitLocker drive detected: $dev"
 
-  if [[ -z "${ALFS_PASSPHRASE:-}" ]] && ! security find-generic-password -s bltusb-anylinuxfs -a passphrase -w >/dev/null 2>&1; then
+  # Match the actual v1.3.1 mount path: get_passphrase_quiet reads ALFS_PASSPHRASE
+  # or THIS drive's PER-DEVICE Keychain item (via device_key), NOT the legacy
+  # global `-a passphrase` account. A normal v1.3.1 user who saved via the opt-in
+  # flow has only a per-device entry, so gating on the legacy account alone would
+  # permanently skip the whole suite (including fresh_device). Skip only when the
+  # env var, the per-device item, AND the legacy global item are all absent.
+  if [[ -z "${ALFS_PASSPHRASE:-}" ]] \
+     && ! kc_has "$(dev_key "$dev")" \
+     && ! security find-generic-password -s bltusb-anylinuxfs -a passphrase -w >/dev/null 2>&1; then
     skip "no password in Keychain or ALFS_PASSPHRASE"; return
   fi
   [[ -z "$(mp)" ]] || sudo anylinuxfs unmount >/dev/null 2>&1
@@ -116,30 +153,39 @@ hardware() {
   if [[ -z "$(mp)" ]]; then ok "unmounted"; else no "still mounted after umount"; fi
 
   hdr "hardware: read-write mount + speed + integrity"
-  local size_mb=100 tmp src out src_md5
-  tmp="$(mktemp -d)"; src="$tmp/src.bin"; out="$tmp/out.bin"
-  dd if=/dev/urandom of="$src" bs=1m count=$size_mb 2>/dev/null
-  src_md5="$(md5 -q "$src")"
-
-  "$BIN" rw "$dev" >/dev/null 2>&1
-  wait_mount; M="$(mp)"
-  if [[ -z "$M" ]]; then
-    no "read-write mount failed"
+  # Destructive-ish (writes a temp file to a real drive). Only run against a
+  # device the operator explicitly names as disposable — never an auto-detected
+  # drive — to avoid ever writing to the wrong disk. Skipping still lets the
+  # fresh-device test below run.
+  if [[ -z "${BLTUSB_TEST_DEVICE:-}" ]]; then
+    skip "read-write test needs BLTUSB_TEST_DEVICE=/dev/diskXsY (won't write to an auto-detected drive)"
+  elif [[ "$dev" != "$BLTUSB_TEST_DEVICE" ]]; then
+    skip "detected $dev != BLTUSB_TEST_DEVICE $BLTUSB_TEST_DEVICE — skipping write test"
   else
-    ok "read-write mounted: $M"
-    local testf="$M/bltusb_selftest_$$.bin" t0 t1 t2 t3
-    t0="$(now)"; dd if="$src" of="$testf" bs=1m 2>/dev/null; sync; t1="$(now)"
-    ok "write ${size_mb}MB → $(perl -e "printf '%.1f MB/s', $size_mb/($t1-$t0)")"
-    sudo purge 2>/dev/null || true
-    t2="$(now)"; dd if="$testf" of="$out" bs=1m 2>/dev/null; t3="$(now)"
-    ok "read  ${size_mb}MB → $(perl -e "printf '%.1f MB/s', $size_mb/($t3-$t2)")  (may be cached)"
-    if [[ "$src_md5" == "$(md5 -q "$out")" ]]; then ok "md5 integrity OK"; else no "md5 mismatch"; fi
-    rm -f "$testf"; sync
-    if ls "$M"/bltusb_selftest_* >/dev/null 2>&1; then no "test files left behind"; else ok "test files cleaned up"; fi
+    local size_mb=100 tmp src out src_md5
+    tmp="$(mktemp -d)"; src="$tmp/src.bin"; out="$tmp/out.bin"
+    dd if=/dev/urandom of="$src" bs=1m count=$size_mb 2>/dev/null
+    src_md5="$(md5 -q "$src")"
+    "$BIN" rw "$dev" >/dev/null 2>&1
+    wait_mount; M="$(mp)"
+    if [[ -z "$M" ]]; then
+      no "read-write mount failed"
+    else
+      ok "read-write mounted: $M"
+      local testf="$M/bltusb_selftest_$$.bin" t0 t1 t2 t3
+      t0="$(now)"; dd if="$src" of="$testf" bs=1m 2>/dev/null; sync; t1="$(now)"
+      ok "write ${size_mb}MB → $(perl -e "printf '%.1f MB/s', $size_mb/($t1-$t0)")"
+      sudo purge 2>/dev/null || true
+      t2="$(now)"; dd if="$testf" of="$out" bs=1m 2>/dev/null; t3="$(now)"
+      ok "read  ${size_mb}MB → $(perl -e "printf '%.1f MB/s', $size_mb/($t3-$t2)")  (may be cached)"
+      if [[ "$src_md5" == "$(md5 -q "$out")" ]]; then ok "md5 integrity OK"; else no "md5 mismatch"; fi
+      rm -f "$testf"; sync
+      if ls "$M"/bltusb_selftest_* >/dev/null 2>&1; then no "test files left behind"; else ok "test files cleaned up"; fi
+    fi
+    "$BIN" umount >/dev/null 2>&1
+    if [[ -z "$(mp)" ]]; then ok "unmounted"; else no "still mounted after umount"; fi
+    rm -rf "$tmp"
   fi
-  "$BIN" umount >/dev/null 2>&1
-  if [[ -z "$(mp)" ]]; then ok "unmounted"; else no "still mounted after umount"; fi
-  rm -rf "$tmp"
 
   fresh_device "$dev"
 }
@@ -154,38 +200,53 @@ fresh_device() {
   if [[ "${BLTUSB_TEST_FRESH:-}" != "1" ]]; then
     skip "set BLTUSB_TEST_FRESH=1 to run (clears+restores the Keychain password)"; return
   fi
-  FRESH_ORIG="$(security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w 2>/dev/null || true)"
+  # Password to FEED during the test: prefer the legacy global item (or env).
+  FRESH_LEGACYORIG="$(security find-generic-password -s "$KC_SVC" -a "$KC_ACC" -w 2>/dev/null || true)"
+  FRESH_ORIG="$FRESH_LEGACYORIG"
   [[ -z "$FRESH_ORIG" && -n "${ALFS_PASSPHRASE:-}" ]] && FRESH_ORIG="$ALFS_PASSPHRASE"
+  FRESH_DEVKEY="$(dev_key "$dev")"
+  # Capture the REAL per-device password BEFORE we delete it, so restore_keychain
+  # can put back the exact value under the per-device account (the slot the mount
+  # path actually reads). Without this the user's remembered per-drive password
+  # would be permanently destroyed by running this opt-in test.
+  FRESH_DEVORIG="$(security find-generic-password -s "$KC_SVC" -a "$FRESH_DEVKEY" -w 2>/dev/null || true)"
+  # Need SOMETHING to feed (and, ideally, to restore). Prefer the per-device
+  # value if that is all we have.
+  [[ -z "$FRESH_ORIG" ]] && FRESH_ORIG="$FRESH_DEVORIG"
   if [[ -z "$FRESH_ORIG" ]]; then skip "no known password to feed and restore"; return; fi
   trap restore_keychain EXIT
   unset ALFS_PASSPHRASE
 
+  # Unseen-device state: clear BOTH this drive's per-device item AND the legacy
+  # global item (the mount path's migration fallback reads the latter), so the
+  # prompt path is actually exercised. restore_keychain puts both back on EXIT.
+  security delete-generic-password -s "$KC_SVC" -a "$FRESH_DEVKEY" >/dev/null 2>&1
   security delete-generic-password -s "$KC_SVC" -a "$KC_ACC" >/dev/null 2>&1
-  if kc_has; then no "keychain not cleared"; else ok "keychain cleared (unseen-device state)"; fi
+  if kc_has "$FRESH_DEVKEY" || kc_has "$KC_ACC"; then no "keychain not cleared"; else ok "keychain cleared (unseen-device state)"; fi
   settle   # let the previous suite's unmount fully tear down before remounting
 
-  # 1) prompt appears; decline saving
+  # 1) prompt appears; decline saving → nothing stored for this drive
   out="$(printf '%s\nn\n' "$FRESH_ORIG" | BLTUSB_LANG=en "$BIN" mount ro "$dev" 2>&1)"
   case "$out" in *"BitLocker password"*) ok "password prompt shown for unseen device" ;; *) no "no password prompt" ;; esac
   wait_mount
   if [[ -n "$(mp)" ]]; then ok "mounted with typed password"; else no "mount with typed password failed"; fi
-  if kc_has; then no "declined save but password was stored"; else ok "declined → not saved"; fi
+  if kc_has "$FRESH_DEVKEY"; then no "declined save but password was stored"; else ok "declined → not saved (opt-in)"; fi
   "$BIN" umount >/dev/null 2>&1; settle
 
-  # 2) accept saving
+  # 2) accept saving → stored under this drive's own key
   printf '%s\ny\n' "$FRESH_ORIG" | BLTUSB_LANG=en "$BIN" mount ro "$dev" >/dev/null 2>&1
   wait_mount; "$BIN" umount >/dev/null 2>&1; settle
-  if kc_has; then ok "accepted → password saved to Keychain"; else no "accepted but not saved"; fi
+  if kc_has "$FRESH_DEVKEY"; then ok "accepted → saved under per-device key"; else no "accepted but not saved"; fi
 
   # 3) saved → no more prompt (empty stdin)
   out="$(printf '' | BLTUSB_LANG=en "$BIN" mount ro "$dev" 2>&1)"
-  case "$out" in *"BitLocker password"*) no "still prompted after save" ;; *) ok "no prompt after save (uses Keychain)" ;; esac
+  case "$out" in *"BitLocker password"*) no "still prompted after save" ;; *) ok "no prompt after save (uses per-device key)" ;; esac
   wait_mount
   if [[ -n "$(mp)" ]]; then ok "passwordless mount ok"; else no "passwordless mount failed"; fi
   "$BIN" umount >/dev/null 2>&1; settle
 
   restore_keychain; trap - EXIT
-  ok "original Keychain password restored"
+  ok "original Keychain state restored"
 }
 
 # ---------------------------------------------------------------------------

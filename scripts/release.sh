@@ -30,7 +30,11 @@ DRY_RUN=0
 say()  { printf '\033[1;34m==>\033[0m \033[1m%s\033[0m\n' "$*"; }
 ok()   { printf '\033[32m✓\033[0m %s\n' "$*"; }
 die()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
-run()  { if [[ $DRY_RUN -eq 1 ]]; then printf '   \033[2m[dry-run] %s\033[0m\n' "$*"; else eval "$*"; fi; }
+# Run a command from its argument vector (no eval): each argument is passed
+# through verbatim, so paths with spaces, quotes, or other shell metacharacters
+# (e.g. a TAP_DIR like /home/o'neil/homebrew-tap) can never be word-split or
+# injected into the shell.
+run()  { if [[ $DRY_RUN -eq 1 ]]; then printf '   \033[2m[dry-run] %s\033[0m\n' "$*"; else "$@"; fi; }
 
 # ---- args ----
 [[ "${1:-}" == "--dry-run" ]] && { DRY_RUN=1; shift; }
@@ -78,22 +82,26 @@ ok "VERSION=$NEW"
 
 # ---- 2. tests ----
 say "Lint + smoke tests"
-run "shellcheck bltusb test/bltusb_test.sh"
-run "bash test/bltusb_test.sh smoke >/dev/null"
+run shellcheck bltusb test/bltusb_test.sh
+if [[ $DRY_RUN -eq 1 ]]; then
+  run bash test/bltusb_test.sh smoke
+else
+  bash test/bltusb_test.sh smoke >/dev/null
+fi
 ok "shellcheck + smoke passed"
 
 # ---- 3. commit, tag, push ----
 say "Commit, tag, push"
-run "git add bltusb"
-run "git commit -m 'release: $TAG'"
-run "git tag -a '$TAG' -m 'bltusb $TAG'"
-run "git push origin HEAD"
-run "git push origin '$TAG'"
+run git add bltusb
+run git commit -m "release: $TAG"
+run git tag -a "$TAG" -m "bltusb $TAG"
+run git push origin HEAD
+run git push origin "$TAG"
 ok "pushed $TAG"
 
 # ---- 4. GitHub release ----
 say "Create GitHub release"
-run "gh release create '$TAG' --title 'bltusb $TAG' --generate-notes"
+run gh release create "$TAG" --title "bltusb $TAG" --generate-notes
 ok "release created"
 
 # ---- 5. sha256 of the tarball ----
@@ -125,9 +133,9 @@ if [[ $DRY_RUN -eq 0 ]]; then
   grep -q "$TAG.tar.gz" "$FORMULA" || die "formula url not updated"
   grep -q "$SHA" "$FORMULA" || die "formula sha256 not updated"
 fi
-run "git -C '$TAP_DIR' add '$FORMULA_REL'"
-run "git -C '$TAP_DIR' commit -m 'bltusb $NEW'"
-run "git -C '$TAP_DIR' push origin HEAD"
+run git -C "$TAP_DIR" add "$FORMULA_REL"
+run git -C "$TAP_DIR" commit -m "bltusb $NEW"
+run git -C "$TAP_DIR" push origin HEAD
 ok "tap updated to $NEW"
 
 say "Done 🎉  Users can now:  brew update && brew upgrade bltusb"
