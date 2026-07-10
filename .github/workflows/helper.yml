@@ -1,0 +1,28 @@
+name: Helper (Swift)
+
+# Phase-2 signed-helper foundation (helper/). Builds + runs the unit tests on a
+# macOS runner (which has a full toolchain, so `swift test` needs no extra flags,
+# unlike a Command-Line-Tools-only dev box). Free for public repositories.
+
+on:
+  push:
+    branches: [main]
+    paths: ['helper/**', '.github/workflows/helper.yml']
+  pull_request:
+    paths: ['helper/**', '.github/workflows/helper.yml']
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: helper
+    steps:
+      - uses: actions/checkout@v4
+      - name: Swift version
+        run: swift --version
+      - name: Build
+        run: swift build
+      - name: Test
+        run: swift test
