@@ -118,7 +118,19 @@ public final class HelperClient: @unchecked Sendable {
     }
 
     private static func errorField(_ reply: xpc_object_t) -> HelperError? {
-        if xpc_get_type(reply) == XPC_TYPE_ERROR { return .backendFailure }
+        if xpc_get_type(reply) == XPC_TYPE_ERROR {
+            // A connection-level error means the peer code-signing requirement
+            // rejected us pre-delivery (kernel-enforced layer 1: the daemon's
+            // xpc_connection_set_peer_code_signing_requirement refused this
+            // client's signature), so the connection was torn down before any
+            // reply. Surface that as notAuthorized rather than a backend fault —
+            // it is the caller-authentication boundary firing.
+            if xpc_equal(reply, XPC_ERROR_CONNECTION_INVALID) ||
+               xpc_equal(reply, XPC_ERROR_CONNECTION_INTERRUPTED) {
+                return .notAuthorized
+            }
+            return .backendFailure
+        }
         guard let c = xpc_dictionary_get_string(reply, "error") else { return nil }
         return HelperError(rawValue: String(cString: c)) ?? .internalError
     }

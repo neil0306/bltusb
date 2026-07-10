@@ -53,6 +53,29 @@ public final class XPCServer: @unchecked Sendable {
         !kPeerCodeSigningRequirement.contains("<TEAMID>")
     }
 
+    /// The requirement string the daemon actually enforces.
+    ///
+    /// In every normal / production build this is exactly `kPeerCodeSigningRequirement`.
+    /// A *dev-only* override (see `DevRequirement`, compiled in ONLY under the
+    /// `-D BLTUSB_DEV_REQUIREMENT` flag) may substitute a locally-pinned
+    /// requirement — but ONLY when the compiled requirement still contains
+    /// `<TEAMID>` (i.e. `!requirementIsConfigured`). The moment a real Team ID is
+    /// baked in, `requirementIsConfigured` is true, the dev path is skipped, and
+    /// this returns the production requirement unchanged. So a Team-ID build can
+    /// never be silently relaxed by the dev override, even if it was compiled
+    /// with the dev flag on.
+    static var effectiveRequirement: String? {
+        if requirementIsConfigured { return kPeerCodeSigningRequirement }
+        return DevRequirement.string   // nil unless the dev flag is set AND the file exists
+    }
+
+    /// True if we have *some* requirement to authenticate against — either the
+    /// production Team-ID requirement, or (dev builds only) a pinned dev
+    /// requirement. When false we fail closed and refuse every caller.
+    static var authIsConfigured: Bool {
+        effectiveRequirement != nil
+    }
+
     /// Start listening on the Mach service. This is the process entry point of
     /// the root daemon.
     public func run() {
@@ -76,10 +99,13 @@ public final class XPCServer: @unchecked Sendable {
     #if canImport(XPC)
     private func configureAndAccept(_ peer: xpc_connection_t) {
         // Layer 1: kernel-enforced peer code-signing requirement.
-        // TODO(signing/deploy): this is a no-op guard until the requirement has a
-        // real Team ID. We still install it; and we hard-refuse below if not.
-        if XPCServer.requirementIsConfigured {
-            _ = xpc_connection_set_peer_code_signing_requirement(peer, kPeerCodeSigningRequirement)
+        // TODO(signing/deploy): in production this is the pinned Team-ID
+        // requirement. In a dev build it may be the locally-pinned dev
+        // requirement (cdhash) — but never a relaxation of a real Team-ID build
+        // (see `effectiveRequirement`). If neither is present we install nothing
+        // here and hard-refuse below.
+        if let req = XPCServer.effectiveRequirement {
+            _ = xpc_connection_set_peer_code_signing_requirement(peer, req)
         }
 
         xpc_connection_set_event_handler(peer) { [weak self] msg in
@@ -87,7 +113,7 @@ public final class XPCServer: @unchecked Sendable {
             guard xpc_get_type(msg) == XPC_TYPE_DICTIONARY else { return }
 
             // Fail closed if we have no configured requirement to authenticate against.
-            guard XPCServer.requirementIsConfigured else {
+            guard XPCServer.authIsConfigured else {
                 self.reply(to: peer, message: msg, error: .notAuthorized)
                 return
             }

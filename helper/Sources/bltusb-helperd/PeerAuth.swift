@@ -39,8 +39,15 @@ enum PeerAuth {
         }
 
         // 3. Check it satisfies the pinned requirement.
+        //    In production this is exactly `kPeerCodeSigningRequirement` (the
+        //    Team-ID requirement). In a dev build it may be the locally-pinned
+        //    dev requirement — but `effectiveRequirement` returns the production
+        //    Team-ID string the instant a real Team ID is compiled in, so a
+        //    Team-ID build is authenticated against the Team ID only. If we have
+        //    no requirement at all, fail closed.
+        guard let reqString = XPCServer.effectiveRequirement else { return false }
         var req: SecRequirement?
-        guard SecRequirementCreateWithString(kPeerCodeSigningRequirement as CFString, [], &req) == errSecSuccess,
+        guard SecRequirementCreateWithString(reqString as CFString, [], &req) == errSecSuccess,
               let requirement = req else {
             return false
         }
