@@ -13,7 +13,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Constants & config
 # ---------------------------------------------------------------------------
-VERSION="1.4.1"
+VERSION="1.4.2"
 # Backend version this release was tested + security-reviewed against. We cannot
 # pin anylinuxfs's INTERNAL image digest / dependency hashes (those are its own
 # build — see docs/AUTO-UNLOCK-RISK.md §"What we cannot do"), but we DO record and
