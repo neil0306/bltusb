@@ -249,52 +249,45 @@ t() {
     au.dedup.failed)  en="Refusing to run two auto-unlock daemons: could not deactivate the other mechanism. Run \`bltusb autounlock uninstall\` first, then retry"; zh_cn="拒绝同时运行两个自动解锁守护进程：无法停用另一种机制。请先运行 \`bltusb autounlock uninstall\`，然后重试"; zh_tw="拒絕同時運行兩個自動解鎖守護程序：無法停用另一種機制。請先執行 \`bltusb autounlock uninstall\`，然後重試" ;;
     au.anylinuxfs.ver) en="NOTE: anylinuxfs %s differs from the security-reviewed version %s. Auto-unlock still works, but the supply-chain review in docs/AUTO-UNLOCK-RISK.md targets the reviewed version"; zh_cn="注意：anylinuxfs %s 与经过安全审查的版本 %s 不一致。自动解锁仍可用，但 docs/AUTO-UNLOCK-RISK.md 的供应链审查是针对已审查版本做的"; zh_tw="注意：anylinuxfs %s 與經過安全審查的版本 %s 不一致。自動解鎖仍可用，但 docs/AUTO-UNLOCK-RISK.md 的供應鏈審查是針對已審查版本做的" ;;
     vm.usage)         en="Usage: bltusb vm <build|update|status> [--digest sha256:… | --dry-run]"; zh_cn="用法：bltusb vm <build|update|status> [--digest sha256:… | --dry-run]"; zh_tw="用法：bltusb vm <build|update|status> [--digest sha256:… | --dry-run]" ;;
-    vm.needroot)      en="This needs root. Re-run: sudo bltusb vm %s"; zh_cn="此操作需要 root 权限。请重新运行：sudo bltusb vm %s"; zh_tw="此操作需要 root 權限。請重新執行：sudo bltusb vm %s" ;;
     vm.nobackend)     en="anylinuxfs not found — install it first (bltusb install)"; zh_cn="未找到 anylinuxfs —— 请先安装（bltusb install）"; zh_tw="未找到 anylinuxfs —— 請先安裝（bltusb install）" ;;
-    vm.badprefix)     en="Cannot locate the installed anylinuxfs Cellar prefix from %s"; zh_cn="无法从 %s 定位已安装的 anylinuxfs Cellar 前缀"; zh_tw="無法從 %s 定位已安裝的 anylinuxfs Cellar 前綴" ;;
-    vm.prefix)        en="Staging source (Cellar prefix): %s"; zh_cn="暂存来源（Cellar 前缀）：%s"; zh_tw="暫存來源（Cellar 前綴）：%s" ;;
-    vm.verwarn)       en="Installed anylinuxfs %s differs from the pinned/reviewed version %s — staging anyway"; zh_cn="已安装的 anylinuxfs %s 与固定/已审查版本 %s 不一致 —— 仍继续暂存"; zh_tw="已安裝的 anylinuxfs %s 與固定/已審查版本 %s 不一致 —— 仍繼續暫存" ;;
-    vm.notomlsrc)     en="Source anylinuxfs.toml not found at %s — cannot copy the pinned kernel URLs"; zh_cn="源 anylinuxfs.toml 不在 %s —— 无法复制固定的内核 URL"; zh_tw="源 anylinuxfs.toml 不在 %s —— 無法複製固定的核心 URL" ;;
-    vm.nokernelurl)   en="Could not read kernel.image_url / kernel.modules_url from %s (the pinned libkrunfw URLs)"; zh_cn="无法从 %s 读取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）"; zh_tw="無法從 %s 讀取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）" ;;
+    vm.verwarn)       en="Installed anylinuxfs %s differs from the pinned/reviewed version %s — building anyway"; zh_cn="已安装的 anylinuxfs %s 与固定/已审查版本 %s 不一致 —— 仍继续构建"; zh_tw="已安裝的 anylinuxfs %s 與固定/已審查版本 %s 不一致 —— 仍繼續建置" ;;
+    vm.notoml)        en="anylinuxfs.toml not found at %s — cannot add the pinned image config"; zh_cn="anylinuxfs.toml 不在 %s —— 无法添加固定镜像配置"; zh_tw="anylinuxfs.toml 不在 %s —— 無法新增固定鏡像設定" ;;
+    vm.nokernelurl)   en="Could not read kernel.image_url / kernel.modules_url from the alpine-latest entry of %s (the pinned libkrunfw URLs)"; zh_cn="无法从 %s 的 alpine-latest 条目读取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）"; zh_tw="無法從 %s 的 alpine-latest 條目讀取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）" ;;
     vm.digestask)     en="Resolving the base image digest to pin"; zh_cn="正在解析要固定的基础镜像 digest"; zh_tw="正在解析要固定的基礎鏡像 digest" ;;
     vm.digestfrom)    en="Pinned digest from %s: %s"; zh_cn="从 %s 解析到的固定 digest：%s"; zh_tw="從 %s 解析到的固定 digest：%s" ;;
     vm.digestarg)     en="Using explicit --digest: %s"; zh_cn="使用显式 --digest：%s"; zh_tw="使用明確的 --digest：%s" ;;
     vm.baddigest)     en="Bad --digest %s — expected sha256:<64 hex>"; zh_cn="无效的 --digest %s —— 应为 sha256:<64 位十六进制>"; zh_tw="無效的 --digest %s —— 應為 sha256:<64 位十六進位>" ;;
-    vm.nodigest)      en="Cannot resolve a base image digest. Run 'anylinuxfs init' (or 'anylinuxfs image install alpine-latest') once as your normal user first, or pass --digest sha256:…"; zh_cn="无法解析基础镜像 digest。请先以普通用户身份运行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 传入"; zh_tw="無法解析基礎鏡像 digest。請先以普通使用者身份執行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 傳入" ;;
-    vm.staging)       en="Staging anylinuxfs root-owned into %s"; zh_cn="正在把 anylinuxfs 以 root 拥有方式暂存到 %s"; zh_tw="正在把 anylinuxfs 以 root 擁有方式暫存到 %s" ;;
-    vm.staged)        en="Staged root-owned backend at %s"; zh_cn="已在 %s 暂存 root 拥有的后端"; zh_tw="已在 %s 暫存 root 擁有的後端" ;;
-    vm.writetoml)     en="Writing root-owned image config %s (pinned [images.bltusb-min])"; zh_cn="正在写入 root 拥有的镜像配置 %s（固定 [images.bltusb-min]）"; zh_tw="正在寫入 root 擁有的鏡像設定 %s（固定 [images.bltusb-min]）" ;;
-    vm.buildstep)     en="Building the pinned minimal rootfs (image install bltusb-min)"; zh_cn="正在构建固定的最小 rootfs（image install bltusb-min）"; zh_tw="正在建置固定的最小 rootfs（image install bltusb-min）" ;;
-    vm.stripstep)     en="Stripping unneeded packages (keep cryptsetup / ntfs-3g / nfs)"; zh_cn="正在剥离不需要的软件包（保留 cryptsetup / ntfs-3g / nfs）"; zh_tw="正在剝離不需要的套件（保留 cryptsetup / ntfs-3g / nfs）" ;;
-    vm.dryrun)        en="DRY-RUN — printing the commands instead of running them:"; zh_cn="DRY-RUN —— 只打印命令而不执行："; zh_tw="DRY-RUN —— 只列印命令而不執行：" ;;
-    vm.dryskip)       en="DRY-RUN: skipped the real (slow / networked / root) build + strip"; zh_cn="DRY-RUN：已跳过真实（慢/联网/root）的构建与剥离"; zh_tw="DRY-RUN：已跳過真實（慢/聯網/root）的建置與剝離" ;;
-    vm.harden)        en="Hardening ownership (root:wheel, non-world-writable) of the staged tree + %s"; zh_cn="正在加固暂存树 + %s 的所有权（root:wheel，非全局可写）"; zh_tw="正在加固暫存樹 + %s 的所有權（root:wheel，非全域可寫）" ;;
-    vm.stripwarn)     en="package strip incomplete (a package to drop was not installed) — continuing; the pin is unaffected"; zh_cn="精简包未完全完成（某个待删除的包未安装）—— 继续；固定不受影响"; zh_tw="精簡套件未完全完成（某個待刪除的套件未安裝）—— 繼續；固定不受影響" ;;
-    vm.rootfsuser)    en="BLOCKED: anylinuxfs built the rootfs at %s, which is USER-writable — it pins its store to the console user (SCDynamicStore) with no override, so it will not build a root-owned rootfs. A root daemon booting a user-writable rootfs is a local privilege escalation, so this is refused. See docs/BACKEND-HARDENING-SCOPE.md for the options (upstream store-path override, or a from-scratch/libkrun rootfs)."; zh_cn="已阻断：anylinuxfs 把 rootfs 建到了 %s，该目录用户可写 —— 它把 store 固定到控制台用户（SCDynamicStore）且无覆盖手段，因此无法构建 root 拥有的 rootfs。root 守护进程启动用户可写的 rootfs 是本地提权，故拒绝。选项见 docs/BACKEND-HARDENING-SCOPE.md（上游加 store 路径覆盖，或从零/libkrun 自建 rootfs）。"; zh_tw="已阻斷：anylinuxfs 把 rootfs 建到了 %s，該目錄使用者可寫 —— 它把 store 固定到主控台使用者（SCDynamicStore）且無覆蓋手段，因此無法建置 root 擁有的 rootfs。root 守護程序啟動使用者可寫的 rootfs 是本地提權，故拒絕。選項見 docs/BACKEND-HARDENING-SCOPE.md（上游加 store 路徑覆蓋，或從零/libkrun 自建 rootfs）。" ;;
-    vm.manifest)      en="Wrote sha256 manifest %s"; zh_cn="已写入 sha256 清单 %s"; zh_tw="已寫入 sha256 清單 %s" ;;
-    vm.buildok)       en="vm build complete"; zh_cn="vm build 完成"; zh_tw="vm build 完成" ;;
-    vm.wire)          en="Phase-2 wiring (separate): point AnylinuxfsRunner Mode-B binaryPath at %s, run it PURE ROOT (unset SUDO_UID, HOME=/var/root) so it uses the root-owned store %s"; zh_cn="Phase-2 接线（另行处理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，以纯 root（清除 SUDO_UID，HOME=/var/root）运行，使其使用 root 拥有的 store %s"; zh_tw="Phase-2 接線（另行處理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，以純 root（清除 SUDO_UID，HOME=/var/root）執行，使其使用 root 擁有的 store %s" ;;
-    vm.failclean)     en="vm build FAILED — the staged tree under %s may be incomplete/half-owned. Inspect it and remove it before retrying: sudo rm -rf %s"; zh_cn="vm build 失败 —— %s 下的暂存树可能不完整/半拥有。请检查后删除再重试：sudo rm -rf %s"; zh_tw="vm build 失敗 —— %s 下的暫存樹可能不完整/半擁有。請檢查後刪除再重試：sudo rm -rf %s" ;;
-    vm.up.resolve)    en="Re-resolving alpine:latest to a new digest"; zh_cn="正在重新解析 alpine:latest 到新的 digest"; zh_tw="正在重新解析 alpine:latest 到新的 digest" ;;
+    vm.nodigest)      en="Cannot resolve a base image digest. Run 'anylinuxfs init' (or 'anylinuxfs image install alpine-latest') once first, or pass --digest sha256:…"; zh_cn="无法解析基础镜像 digest。请先运行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 传入"; zh_tw="無法解析基礎鏡像 digest。請先執行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 傳入" ;;
+    vm.pinned)        en="Pinned base digest: %s"; zh_cn="固定基础镜像 digest：%s"; zh_tw="固定基礎鏡像 digest：%s" ;;
+    vm.tomledit)      en="Writing pinned [images.bltusb-min] into %s"; zh_cn="正在把固定的 [images.bltusb-min] 写入 %s"; zh_tw="正在把固定的 [images.bltusb-min] 寫入 %s" ;;
+    vm.tomlbak)       en="Backed up the original config to %s"; zh_cn="已备份原配置到 %s"; zh_tw="已備份原設定到 %s" ;;
+    vm.tomlsymlink)   en="Refusing to write: the config destination is a symlink (would follow it to another file): %s"; zh_cn="拒绝写入：配置目标是符号链接（会跟随到另一个文件）：%s"; zh_tw="拒絕寫入：設定目標是符號連結（會跟隨到另一個檔案）：%s" ;;
+    vm.tomlbad)       en="Refusing to save: the rewritten config failed validation (would corrupt %s) — left it unchanged"; zh_cn="拒绝保存：重写后的配置未通过校验（会损坏 %s）—— 未做改动"; zh_tw="拒絕儲存：重寫後的設定未通過校驗（會損壞 %s）—— 未做改動" ;;
+    vm.tomlok)        en="Image config updated"; zh_cn="镜像配置已更新"; zh_tw="鏡像設定已更新" ;;
+    vm.kernelok)      en="microVM kernel + modules verified (sha256-pinned)"; zh_cn="microVM 内核与模块校验通过（sha256 固定）"; zh_tw="microVM 內核與模組校驗通過（sha256 固定）" ;;
+    vm.kernelbad)     en="Refusing to build: pinned kernel/modules artifact failed sha256 verification: %s"; zh_cn="拒绝构建：固定的内核/模块文件 sha256 校验失败：%s"; zh_tw="拒絕建置：固定的內核/模組檔案 sha256 校驗失敗：%s" ;;
+    vm.kernelunknown) en="Could not locate the pinned anylinuxfs kernel/modules to verify — continuing (relying on the Homebrew formula pin)"; zh_cn="未找到可校验的 anylinuxfs 内核/模块 —— 继续（依赖 Homebrew formula 的固定）"; zh_tw="未找到可校驗的 anylinuxfs 內核/模組 —— 繼續（依賴 Homebrew formula 的固定）" ;;
+    vm.buildstep)     en="Building the pinned microVM rootfs (image install bltusb-min)"; zh_cn="正在构建固定的 microVM rootfs（image install bltusb-min）"; zh_tw="正在建置固定的 microVM rootfs（image install bltusb-min）" ;;
+    vm.dryrun)        en="DRY-RUN — printing the command instead of running it:"; zh_cn="DRY-RUN —— 只打印命令而不执行："; zh_tw="DRY-RUN —— 只列印命令而不執行：" ;;
+    vm.dryskip)       en="DRY-RUN: skipped the real (slow / networked) build"; zh_cn="DRY-RUN：已跳过真实（慢/联网）的构建"; zh_tw="DRY-RUN：已跳過真實（慢/聯網）的建置" ;;
+    vm.buildok)       en="vm build complete — pinned, self-built microVM 'bltusb-min' ready"; zh_cn="vm build 完成 —— 已构建固定、自建的 microVM 'bltusb-min'"; zh_tw="vm build 完成 —— 已建置固定、自建的 microVM 'bltusb-min'" ;;
+    vm.keep)          en="Full FS driver set: cryptsetup (BitLocker/LUKS), ntfs-3g, vfat, ext/btrfs (kernel modules), nfs"; zh_cn="完整文件系统驱动集：cryptsetup（BitLocker/LUKS）、ntfs-3g、vfat、ext/btrfs（内核模块）、nfs"; zh_tw="完整檔案系統驅動集：cryptsetup（BitLocker/LUKS）、ntfs-3g、vfat、ext/btrfs（核心模組）、nfs" ;;
+    vm.usenote)       en="Built in the user store %s and pinned to %s. A follow-up will point 'bltusb mount' at this image; for now it is built and pinnable."; zh_cn="已构建在用户存储 %s 并固定到 %s。后续会让 'bltusb mount' 指向该镜像；目前它已构建且可固定。"; zh_tw="已建置在使用者存儲 %s 並固定到 %s。後續會讓 'bltusb mount' 指向該鏡像；目前它已建置且可固定。" ;;
+    vm.up.resolve)    en="Re-resolving alpine:latest to a fresh digest"; zh_cn="正在重新解析 alpine:latest 到新的 digest"; zh_tw="正在重新解析 alpine:latest 到新的 digest" ;;
     vm.up.oldnew)     en="Digest change:  OLD %s  ->  NEW %s"; zh_cn="digest 变更：  旧 %s  ->  新 %s"; zh_tw="digest 變更：  舊 %s  ->  新 %s" ;;
-    vm.up.same)       en="New digest equals the currently pinned one (%s) — nothing to update"; zh_cn="新 digest 与当前固定的一致（%s）—— 无需更新"; zh_tw="新 digest 與目前固定的一致（%s）—— 無需更新" ;;
+    vm.up.same)       en="New digest equals the currently pinned one (%s) — up to date"; zh_cn="新 digest 与当前固定的一致（%s）—— 已是最新"; zh_tw="新 digest 與目前固定的一致（%s）—— 已是最新" ;;
     vm.up.confirm)    en="Re-pin to the NEW digest and rebuild? [y/N] "; zh_cn="固定为新的 digest 并重新构建吗？[y/N] "; zh_tw="固定為新的 digest 並重新建置嗎？[y/N] " ;;
     vm.up.cancelled)  en="Update cancelled — the pin is unchanged"; zh_cn="更新已取消 —— 固定未变更"; zh_tw="更新已取消 —— 固定未變更" ;;
-    vm.up.nocurrent)  en="No currently-pinned digest found in %s (run 'sudo bltusb vm build' first)"; zh_cn="在 %s 中未找到当前固定的 digest（请先运行 'sudo bltusb vm build'）"; zh_tw="在 %s 中未找到目前固定的 digest（請先執行 'sudo bltusb vm build'）" ;;
-    vm.st.header)     en="bltusb vm (Mode-B backend) status"; zh_cn="bltusb vm（Mode-B 后端）状态"; zh_tw="bltusb vm（Mode-B 後端）狀態" ;;
-    vm.st.root)       en="Staged backend"; zh_cn="暂存后端"; zh_tw="暫存後端" ;;
-    vm.st.home)       en="Rootfs store (/var/root, root-owned)"; zh_cn="Rootfs store (/var/root，root 拥有)"; zh_tw="Rootfs store (/var/root，root 擁有)" ;;
-    vm.st.rootonly)   en="root-only (/var/root) — run: sudo bltusb vm status"; zh_cn="仅 root 可见 (/var/root) —— 请运行：sudo bltusb vm status"; zh_tw="僅 root 可見 (/var/root) —— 請執行：sudo bltusb vm status" ;;
-    vm.st.manifest)   en="Manifest"; zh_cn="清单"; zh_tw="清單" ;;
+    vm.up.nocurrent)  en="No currently-pinned digest found in %s (run 'bltusb vm build' first)"; zh_cn="在 %s 中未找到当前固定的 digest（请先运行 'bltusb vm build'）"; zh_tw="在 %s 中未找到目前固定的 digest（請先執行 'bltusb vm build'）" ;;
+    vm.up.verify)     en="Verified: 'anylinuxfs image list' now shows bltusb-min"; zh_cn="已验证：'anylinuxfs image list' 现在列出 bltusb-min"; zh_tw="已驗證：'anylinuxfs image list' 現在列出 bltusb-min" ;;
+    vm.up.verifyfail) en="Rebuilt, but 'anylinuxfs image list' does not yet show bltusb-min — check the build output above"; zh_cn="已重新构建，但 'anylinuxfs image list' 尚未列出 bltusb-min —— 请检查上方构建输出"; zh_tw="已重新建置，但 'anylinuxfs image list' 尚未列出 bltusb-min —— 請檢查上方建置輸出" ;;
+    vm.st.header)     en="bltusb vm (bltusb-min microVM) status"; zh_cn="bltusb vm（bltusb-min microVM）状态"; zh_tw="bltusb vm（bltusb-min microVM）狀態" ;;
+    vm.st.built)      en="Built"; zh_cn="已构建"; zh_tw="已建置" ;;
     vm.st.digest)     en="Pinned digest"; zh_cn="固定 digest"; zh_tw="固定 digest" ;;
-    vm.st.chain)      en="Trust chain (helper verifiedBackendPath check)"; zh_cn="信任链（helper verifiedBackendPath 检查）"; zh_tw="信任鏈（helper verifiedBackendPath 檢查）" ;;
-    vm.st.notbuilt)   en="not built (run: sudo bltusb vm build)"; zh_cn="未构建（运行：sudo bltusb vm build）"; zh_tw="未建置（執行：sudo bltusb vm build）" ;;
-    vm.st.present)    en="present"; zh_cn="存在"; zh_tw="存在" ;;
-    vm.st.absent)     en="absent"; zh_cn="不存在"; zh_tw="不存在" ;;
-    vm.st.ownok)      en="root-owned, non-world-writable ✓"; zh_cn="root 拥有、非全局可写 ✓"; zh_tw="root 擁有、非全域可寫 ✓" ;;
-    vm.st.ownbad)     en="NOT root-owned / world-writable ✗ — the helper will REFUSE it"; zh_cn="非 root 拥有 / 全局可写 ✗ —— helper 会拒绝它"; zh_tw="非 root 擁有 / 全域可寫 ✗ —— helper 會拒絕它" ;;
-    vm.st.accept)     en="The helper's Mode-B check WILL accept this backend"; zh_cn="helper 的 Mode-B 检查会接受此后端"; zh_tw="helper 的 Mode-B 檢查會接受此後端" ;;
-    vm.st.reject)     en="The helper's Mode-B check will REFUSE this backend (fix ownership / rebuild)"; zh_cn="helper 的 Mode-B 检查会拒绝此后端（请修复所有权 / 重新构建）"; zh_tw="helper 的 Mode-B 檢查會拒絕此後端（請修復所有權 / 重新建置）" ;;
+    vm.st.drivers)    en="Driver binaries"; zh_cn="驱动程序"; zh_tw="驅動程式" ;;
+    vm.st.notbuilt)   en="not built (run: bltusb vm build)"; zh_cn="未构建（运行：bltusb vm build）"; zh_tw="未建置（執行：bltusb vm build）" ;;
+    vm.st.present)    en="yes"; zh_cn="是"; zh_tw="是" ;;
+    vm.st.absent)     en="no"; zh_cn="否"; zh_tw="否" ;;
     vm.st.none)       en="(none)"; zh_cn="（无）"; zh_tw="（無）" ;;
     *)                en="$k"; zh_cn="$k"; zh_tw="$k" ;;
   esac
@@ -1177,6 +1170,13 @@ cmd_forget() {
       ;;
     /dev/*|disk*)
       local dev="$arg"; [[ "$arg" == disk* ]] && dev="/dev/$arg"
+      # Canonicalize (strip a raw-device 'r', trailing slash) and enforce the SAME
+      # /dev/diskNsM partition regex resolve_device uses, BEFORE any raw read. This
+      # stops a crafted path like /dev/../../etc/hostconfig from reaching the
+      # `sudo dd if=/dev/r${dev#/dev/}` boot-sector read in device_key (root would
+      # otherwise read 512 bytes of an attacker-named file into a discarded hash).
+      dev="$(canonical_device "$dev")"
+      [[ "$dev" =~ ^/dev/disk[0-9]+s[0-9]+$ ]] || die "$(t cfg.deverr)"
       local key; key="$(device_key "$dev")"
       [[ -n "$key" ]] || die "$(t forget.none "$dev")"
       if [[ -n "$(keychain_get "$key")" ]]; then keychain_del "$key"; ok "$(t forget.done "$dev")"; else info "$(t forget.none "$dev")"; fi
@@ -1282,7 +1282,21 @@ _osascript() {
 # and bidi codepoints but NOT backslashes or quotes, so without this a crafted
 # volume label such as  x\" & (do shell script "...")  could break out of the
 # AppleScript string and inject code on the auto-unlock (hostile-media) path.
-_as_escape() { local s="$1"; s="${s//\\/\\\\}"; s="${s//\"/\\\"}"; printf '%s' "$s"; }
+# Additionally collapse C0 control bytes (NUL..US, incl. LF/CR/TAB) and DEL to a
+# space: sanitize_display deliberately keeps \x09/\x0A, but a raw newline/CR in a
+# label would terminate the AppleScript `-e` string literal → osascript compile
+# error → the auto-unlock GUI prompt silently wedges (fail-closed DoS on crafted
+# media). Fold them here, the last gate before the osascript program text.
+_as_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
+  # Fold every C0 control (0x01-0x1F — covers LF 0x0A, CR 0x0D, TAB 0x09) and DEL
+  # (0x7F) to a space so a raw newline/CR in the label can never terminate the
+  # AppleScript `-e` string literal. A bash variable cannot hold a NUL (0x00), so
+  # the range starts at 0x01. printf|tr is byte-safe and never fatal.
+  s="$(printf '%s' "$s" | LC_ALL=C tr '\001-\037\177' ' ')"
+  printf '%s' "$s"
+}
 
 # Native GUI passphrase dialog (hidden answer). The secret is printed on stdout
 # and captured by the caller into a shell variable — it is NEVER placed in the
@@ -1721,277 +1735,239 @@ cmd_autounlock() {
 }
 
 # ---------------------------------------------------------------------------
-# Command: vm — stage a PINNED + MINIMAL + ROOT-OWNED anylinuxfs backend so the
-# Phase-2 helper's verifiedBackendPath() (Mode B) accepts it. See
-# docs/BACKEND-HARDENING-SCOPE.md and docs/DEPLOY-MODES.md (§2 invariant 7).
+# Command: vm — build a PINNED + MINIMAL + UPDATABLE anylinuxfs microVM that
+# contains only the drivers bltusb needs (cryptsetup / ntfs-3g / mount.nfs),
+# living in the normal per-user anylinuxfs store (~/.anylinuxfs) — exactly like
+# anylinuxfs already does. Entirely USER-SPACE: NO sudo, NO /Library, NO
+# root-owning. See docs/BACKEND-HARDENING-SCOPE.md (the root-own daemon concern
+# is decoupled/deferred — a later v1.5 daemon's problem, not this feature's).
 #
-# The staged tree lives entirely under /Library/Application Support/bltusb —
-# root:wheel, non-world-writable — so the resolved backend AND every ancestor
-# are uid-0-owned (what verifiedBackendPath requires, fail-closed).
+# It works via anylinuxfs's own supported mechanism: add an [images.bltusb-min]
+# entry to the user-owned anylinuxfs.toml pinning `alpine@sha256:<digest>` (+ the
+# same libkrunfw kernel URLs copied verbatim from alpine-latest), then
+# `anylinuxfs image install bltusb-min` builds it into ~/.anylinuxfs/bltusb-min
+# and `apk del` strips the surface.
+#
+# SUPPLY-CHAIN NOTE on the kernel/modules URLs (audit CODEX-4 / FABLE-M2):
+# The `kernel.image_url` / `kernel.modules_url` we copy into the bltusb-min block
+# are NOT a live download input at build or boot time. The guest kernel (Image /
+# Image-4K) and modules.squashfs are installed by the anylinuxfs HOMEBREW FORMULA
+# as sha256-PINNED resources (formula `resource "linux-image"` / `"linux-modules"`)
+# into <prefix>/opt/anylinuxfs/libexec/Image* and .../lib/modules.squashfs, and
+# the microVM boots from those LOCAL pinned files (ConfigPaths.libexec_path), not
+# from the toml URL. Verified: `anylinuxfs image install bltusb-min` produces only
+# rootfs+oci under ~/.anylinuxfs/bltusb-min — it does NOT re-fetch the kernel, and
+# the store carries no kernel copy. The toml URLs are declarative/metadata that
+# anylinuxfs's own toml schema has no digest field for, so adding a sha256 field
+# would be silently ignored. Instead we defensively verify the LOCAL pinned kernel
+# artifacts' sha256 before a real build (see _vm_verify_kernel) so a tampered
+# libexec Image/modules is caught, and rely on Homebrew's formula pin for the URL.
 # ---------------------------------------------------------------------------
-VM_BASE="/Library/Application Support/bltusb"
-VM_ROOT="$VM_BASE/anylinuxfs"                 # staged install (bin/libexec/lib/share/etc), root-owned
-VM_MANIFEST="$VM_BASE/vm-manifest.txt"        # sha256 manifest, root:wheel 0644
 VM_IMAGE_NAME="bltusb-min"
-# anylinuxfs keys its per-user rootfs store off SUDO_UID (the invoking user's
-# ~/.anylinuxfs), NOT KRUN_HOME. So we run it PURE ROOT (unset SUDO_UID/SUDO_USER,
-# HOME=/var/root) and the rootfs lands in ROOT's own home — root-owned and
-# non-user-writable. This is the same store the pure-root LaunchDaemon will use.
-VM_STORE="/var/root/.anylinuxfs"
-VM_ROOTFS="$VM_STORE/$VM_IMAGE_NAME/rootfs"
+# Expected sha256 of the LOCAL, Homebrew-formula-pinned microVM kernel/modules
+# artifacts (anylinuxfs 0.18.0, libkrunfw v6.12.62-rev1). These are the EXTRACTED
+# files as installed under <prefix>/opt/anylinuxfs (not the release-tarball hashes
+# the formula pins — Homebrew verifies the tarball, we verify what it unpacked).
+# Recomputed at bump time. modules.squashfs matches the formula's linux-modules
+# pin exactly; Image/Image-4K are the tar-extracted kernels. A real `vm build`
+# verifies whichever kernel it will actually boot; a mismatch aborts the build.
+VM_KERNEL_SHA_IMAGE="1c4a26f2f07156b2d50018a97843065e217475947867f54da4e08362389f834e"
+VM_KERNEL_SHA_IMAGE_4K="a230b602c530014f930fd8488415569d2b98007dde2a067ee2322109ada24645"
+VM_KERNEL_SHA_MODULES="86ed485e4e46ba265261a55e25c92ea15f6118003fcec95a8bafde8ad39f697f"
+# The user-owned anylinuxfs image config we edit. Homebrew keeps it at
+# <brew-prefix>/etc/anylinuxfs.toml (user-owned, editable — no sudo). The
+# BLTUSB_ANYLINUXFS_TOML override lets the test suite point the toml-edit logic
+# at an isolated temp copy, so its safety is exercised without touching the real
+# config (and without any real build).
+if [[ -n "${BLTUSB_ANYLINUXFS_TOML:-}" ]]; then
+  ANYLINUXFS_TOML="$BLTUSB_ANYLINUXFS_TOML"
+else
+  ANYLINUXFS_TOML="$(brew --prefix 2>/dev/null)/etc/anylinuxfs.toml"
+  [[ -f "$ANYLINUXFS_TOML" ]] || ANYLINUXFS_TOML="/opt/homebrew/etc/anylinuxfs.toml"
+fi
 
-# EUID guard: build/update mutate a root-owned /Library tree, so require root.
-_vm_require_root() {   # <subcommand-for-message>
-  [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "$(t vm.needroot "$1")"
-}
+# The current user's anylinuxfs store (matches anylinuxfs's own default).
+_vm_store() { printf '%s' "$HOME/.anylinuxfs"; }
+_vm_rootfs() { printf '%s' "$(_vm_store)/$VM_IMAGE_NAME/rootfs"; }
 
 # Validate a "sha256:<64 hex>" digest string (returns 0/1, no output).
 _vm_is_digest() { [[ "$1" =~ ^sha256:[0-9a-f]{64}$ ]]; }
 
-# The invoking (non-root) user whose ~/.anylinuxfs holds the resolved digest.
-# Under sudo that is $SUDO_USER; else the current user.
-_vm_invoking_user() { printf '%s' "${SUDO_USER:-$(id -un)}"; }
-_vm_invoking_home() {
-  local u; u="$(_vm_invoking_user)"
-  # dscl is the authoritative home lookup on macOS; fall back to eval ~user.
-  dscl . -read "/Users/$u" NFSHomeDirectory 2>/dev/null | awk '{print $2}' | grep . \
-    || eval printf '%s' "~$u" 2>/dev/null
-}
-
-# Resolve the Cellar prefix (grandparent of bin/anylinuxfs) of the installed
-# backend. Prints the prefix on success; returns 1 with nothing on failure.
-_vm_cellar_prefix() {
-  have_anylinuxfs || return 1
-  local bin real prefix
-  bin="$(command -v anylinuxfs)" || return 1
-  real="$(_realpath "$bin" 2>/dev/null || printf '%s' "$bin")"
-  # .../<prefix>/bin/anylinuxfs -> grandparent = <prefix>
-  prefix="$(cd "$(dirname "$real")/.." 2>/dev/null && pwd -P)" || return 1
-  [[ -n "$prefix" && -x "$prefix/bin/anylinuxfs" ]] || return 1
-  printf '%s' "$prefix"
-}
-
-# Read the current pinned base digest from ~USER/.anylinuxfs/alpine/oci/index.json
-# (the digest anylinuxfs last resolved "alpine:latest" to). Prints sha256:… or ''.
-_vm_resolve_index_digest() {
-  local home idx dig
-  home="$(_vm_invoking_home 2>/dev/null || true)"
-  [[ -n "$home" ]] || return 1
-  idx="$home/.anylinuxfs/alpine/oci/index.json"
+# Read the base digest anylinuxfs last resolved "alpine:latest" to, from
+# ~/.anylinuxfs/alpine/oci/index.json. Prints sha256:… or nothing (return 1).
+_vm_index_digest() {
+  local idx dig
+  idx="$(_vm_store)/alpine/oci/index.json"
   [[ -f "$idx" ]] || return 1
   # Extract the first sha256:<64hex> without needing jq (index.json is tiny).
   dig="$(grep -oE 'sha256:[0-9a-f]{64}' "$idx" 2>/dev/null | head -1)"
   [[ -n "$dig" ]] && printf '%s' "$dig"
 }
 
-# The digest currently pinned in the STAGED toml (if any). Prints sha256:… or ''.
-_vm_staged_digest() {
-  local toml="$VM_ROOT/etc/anylinuxfs.toml"
-  [[ -f "$toml" ]] || return 1
-  grep -oE 'alpine@sha256:[0-9a-f]{64}' "$toml" 2>/dev/null | head -1 | sed 's/^alpine@//'
+# The digest currently pinned in the [images.bltusb-min] block of ANYLINUXFS_TOML
+# (if any). Prints sha256:… or nothing (return 1).
+_vm_pinned_digest() {
+  [[ -f "$ANYLINUXFS_TOML" ]] || return 1
+  awk '
+    /^\[/ { inblk = ($0 ~ /^\[images\.bltusb-min\][[:space:]]*$/) }
+    inblk && /docker_ref[[:space:]]*=/ {
+      if (match($0, /sha256:[0-9a-f]{64}/)) { print substr($0, RSTART, RLENGTH); exit }
+    }' "$ANYLINUXFS_TOML" 2>/dev/null | grep . || return 1
 }
 
 # Read a kernel.<key>_url value verbatim from the alpine-latest entry of a toml.
-# Prints the URL (unquoted) or ''.
+# Prints the URL (unquoted) or nothing.
 _vm_toml_kernel_url() {   # <toml> <image_url|modules_url>
   awk -v want="$2" '
-    /^\[images\.alpine-latest\]/ { inblk=1; next }
+    /^\[images\.alpine-latest\][[:space:]]*$/ { inblk=1; next }
     /^\[/ { inblk=0 }
     inblk && $0 ~ ("^kernel\\." want "[[:space:]]*=") {
       sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit
     }' "$1" 2>/dev/null
 }
 
-# Is <path> uid-0-owned AND not group/other-writable? (Mirrors the helper's
-# per-node check.) Returns 0 when hardened, 1 otherwise.
-_vm_node_hardened() {   # <path>
-  local owner perm
-  owner="$(stat -f '%u' "$1" 2>/dev/null)" || return 1
-  [[ "$owner" == "0" ]] || return 1
-  perm="$(stat -f '%p' "$1" 2>/dev/null)" || return 1
-  # low 3 octal digits = ugo; reject if group (020) or other (002) write bit set.
-  local go="${perm: -3}"
-  (( (0$go & 0022) == 0 ))
-}
-
-# Mirror verifiedBackendPath: the resolved backend AND every ancestor directory
-# up to / must be uid-0-owned + non-group/other-writable. Returns 0 if the whole
-# chain is hardened. Prints nothing.
-_vm_chain_hardened() {   # <path>
-  local p; p="$(_realpath "$1" 2>/dev/null || printf '%s' "$1")"
-  [[ -n "$p" ]] || return 1
-  while :; do
-    _vm_node_hardened "$p" || return 1
-    [[ "$p" == "/" ]] && break
-    p="$(dirname "$p")"
-  done
-  return 0
-}
-
-# sha256 helper (macOS: shasum -a 256). Prints "<hash>  <label>" or nothing.
-_vm_sha() {   # <file> <label>
-  [[ -f "$1" ]] || return 0
-  local h; h="$(shasum -a 256 "$1" 2>/dev/null | awk '{print $1}')" || return 0
-  [[ -n "$h" ]] && printf '%s  %s\n' "$h" "$2"
-}
-
-# Stage the whole install root-owned and write the pinned toml. This is the
-# filesystem-mutating part that is SAFE to run in dry-run structure checks only
-# when actually root; callers gate it. On ANY failure it returns non-zero so the
-# caller can warn loudly (fail-closed cleanup guidance) rather than leave a
-# half-owned /Library tree.
-_vm_stage_tree() {   # <cellar-prefix> <pinned-digest>
-  local prefix="$1" digest="$2"
-  local srctoml="$prefix/etc/anylinuxfs.toml"
-  # Prefer the Homebrew etc toml for the pinned kernel URLs (the Cellar prefix
-  # may not carry an etc/ toml); fall back to the staged source if present.
-  [[ -f "$srctoml" ]] || srctoml="/opt/homebrew/etc/anylinuxfs.toml"
-  [[ -f "$srctoml" ]] || { err "$(t vm.notomlsrc "$srctoml")"; return 1; }
+# Idempotently add/replace the [images.bltusb-min] block in ANYLINUXFS_TOML,
+# pinning <digest>, copying the pinned libkrunfw kernel URLs verbatim from the
+# file's alpine-latest entry. SAFE: writes to a temp, validates the new block is
+# well-formed before moving it into place, and keeps a one-time .bak. Returns 0
+# on success, 1 on any error (leaving the original file untouched).
+_vm_write_toml() {   # <digest>
+  local digest="$1"
+  [[ -f "$ANYLINUXFS_TOML" ]] || { err "$(t vm.notoml "$ANYLINUXFS_TOML")"; return 1; }
+  # Refuse to write through a symlinked destination: a symlink at $ANYLINUXFS_TOML
+  # would otherwise redirect our write to the symlink target (shell redirection /
+  # rename both follow the link). The real Homebrew config is a regular file; only
+  # a crafted BLTUSB_ANYLINUXFS_TOML override could point here. Fail closed.
+  [[ -L "$ANYLINUXFS_TOML" ]] && { err "$(t vm.tomlsymlink "$ANYLINUXFS_TOML")"; return 1; }
   local kimg kmod
-  kimg="$(_vm_toml_kernel_url "$srctoml" image_url)"
-  kmod="$(_vm_toml_kernel_url "$srctoml" modules_url)"
-  [[ -n "$kimg" && -n "$kmod" ]] || { err "$(t vm.nokernelurl "$srctoml")"; return 1; }
+  kimg="$(_vm_toml_kernel_url "$ANYLINUXFS_TOML" image_url)"
+  kmod="$(_vm_toml_kernel_url "$ANYLINUXFS_TOML" modules_url)"
+  [[ -n "$kimg" && -n "$kmod" ]] || { err "$(t vm.nokernelurl "$ANYLINUXFS_TOML")"; return 1; }
 
-  step "$(t vm.staging "$VM_ROOT")"
-  # Create the base + root, root:wheel 0755, up front so every ancestor is owned.
-  install -d -o root -g wheel -m 0755 "$VM_BASE" || return 1
-  install -d -o root -g wheel -m 0755 "$VM_ROOT" || return 1
-  local sub
-  for sub in bin libexec lib share etc; do
-    [[ -d "$prefix/$sub" || "$sub" == etc ]] || continue
-    install -d -o root -g wheel -m 0755 "$VM_ROOT/$sub" || return 1
-  done
-  # Copy bin/libexec/lib/share verbatim, root-owned. Use a manifest-friendly copy:
-  # install(1) per-file so ownership/mode are set atomically as each file lands.
-  local f rel
-  for sub in bin libexec lib share; do
-    [[ -d "$prefix/$sub" ]] || continue
-    while IFS= read -r f; do
-      rel="${f#"$prefix"/}"
-      install -d -o root -g wheel -m 0755 "$VM_ROOT/$(dirname "$rel")" || return 1
-      install -o root -g wheel -m 0755 "$f" "$VM_ROOT/$rel" || return 1
-    done < <(find "$prefix/$sub" -type f 2>/dev/null)
-  done
-  [[ -x "$VM_ROOT/bin/anylinuxfs" ]] || { err "$(t vm.staged "$VM_ROOT")"; return 1; }
+  step "$(t vm.tomledit "$ANYLINUXFS_TOML")"
+  # One-time backup before the first edit (never overwrite an existing .bak, so
+  # the very first pristine copy is preserved across repeated builds/updates).
+  local bak="$ANYLINUXFS_TOML.bak"
+  # Refuse a symlinked .bak too: a pre-planted symlink at <toml>.bak would otherwise
+  # redirect the backup copy through the link. Same fail-closed stance as the dest.
+  [[ -L "$bak" ]] && { err "$(t vm.tomlsymlink "$bak")"; return 1; }
+  if [[ ! -f "$bak" ]]; then
+    cp -p "$ANYLINUXFS_TOML" "$bak" 2>/dev/null || { err "$(t vm.notoml "$bak")"; return 1; }
+    info "${C_DIM}$(t vm.tomlbak "$bak")${C_RESET}"
+  fi
 
-  step "$(t vm.writetoml "$VM_ROOT/etc/anylinuxfs.toml")"
-  # Root-owned toml defining our pinned image plus the alpine-latest entry (so
-  # `image list` still parses). Written to a temp then installed root-owned 0644.
-  local tmptoml; tmptoml="$(mktemp)" || return 1
+  # Create the temp in the SAME directory as the destination so the final rename
+  # is an atomic same-filesystem mv (no cross-FS copy, no partial-write window).
+  local destdir; destdir="$(dirname "$ANYLINUXFS_TOML")"
+  local tmp; tmp="$(mktemp "$destdir/.bltusb-toml.XXXXXX")" || return 1
+  # Copy every line of the original EXCEPT the existing [images.bltusb-min] block
+  # (from its header up to — but not including — the next [section] header or EOF),
+  # so other entries and file structure are preserved untouched.
+  awk '
+    /^\[/ {
+      if ($0 ~ /^\[images\.bltusb-min\][[:space:]]*$/) { drop=1; next }
+      drop=0
+    }
+    !drop { print }
+  ' "$ANYLINUXFS_TOML" > "$tmp" || { rm -f "$tmp"; return 1; }
+  # Append our freshly-generated, pinned block at the end.
   {
-    printf '[images.%s]\n' "$VM_IMAGE_NAME"
+    printf '\n[images.%s]\n' "$VM_IMAGE_NAME"
     printf 'base_dir = "%s"\n' "$VM_IMAGE_NAME"
     printf 'docker_ref = "alpine@%s"\n' "$digest"
     printf 'os_type = "Linux"\n'
     printf 'kernel.image_url = "%s"\n' "$kimg"
     printf 'kernel.modules_url = "%s"\n' "$kmod"
-    printf '\n'
-    printf '[images.alpine-latest]\n'
-    printf 'base_dir = "alpine"\n'
-    printf 'docker_ref = "alpine:latest"\n'
-    printf 'os_type = "Linux"\n'
-    printf 'kernel.image_url = "%s"\n' "$kimg"
-    printf 'kernel.modules_url = "%s"\n' "$kmod"
-  } > "$tmptoml"
-  install -o root -g wheel -m 0644 "$tmptoml" "$VM_ROOT/etc/anylinuxfs.toml" || { rm -f "$tmptoml"; return 1; }
-  rm -f "$tmptoml"
-  ok "$(t vm.staged "$VM_ROOT")"
+  } >> "$tmp" || { rm -f "$tmp"; return 1; }
+
+  # Validate the rewritten file before moving it into place: the block must exist
+  # exactly once, carry the pinned docker_ref we just wrote, and both kernel URLs.
+  local nblk npin
+  nblk="$(grep -cE '^\[images\.bltusb-min\][[:space:]]*$' "$tmp" 2>/dev/null || echo 0)"
+  npin="$(grep -cF "docker_ref = \"alpine@$digest\"" "$tmp" 2>/dev/null || echo 0)"
+  if [[ "$nblk" -ne 1 || "$npin" -lt 1 ]] \
+     || ! grep -q '^kernel.image_url = ' "$tmp" \
+     || ! grep -q '^kernel.modules_url = ' "$tmp"; then
+    rm -f "$tmp"
+    err "$(t vm.tomlbad "$ANYLINUXFS_TOML")"
+    return 1
+  fi
+  # Atomic replace: the temp lives in the destination's own directory, so mv -f is
+  # a same-filesystem rename (all-or-nothing — never a truncated/partial file) and,
+  # because $ANYLINUXFS_TOML is proven a regular file (not a symlink) above, the
+  # rename lands on the real config, not a redirected target. Carry over the
+  # original file's mode first so the replacement keeps the user's permissions
+  # (mktemp creates 0600); chmod failure is non-fatal (rename still succeeds).
+  chmod --reference="$ANYLINUXFS_TOML" "$tmp" 2>/dev/null \
+    || { local m; m="$(stat -f '%Lp' "$ANYLINUXFS_TOML" 2>/dev/null)"; [[ -n "$m" ]] && chmod "$m" "$tmp" 2>/dev/null; }
+  mv -f "$tmp" "$ANYLINUXFS_TOML" || { rm -f "$tmp"; return 1; }
+  ok "$(t vm.tomlok)"
   return 0
 }
 
-# Print (dry-run) or run the ONE slow/networked/root build + strip step.
-_vm_build_rootfs() {   # <dryrun:true|false>
+# Defensive supply-chain check: verify the LOCAL, Homebrew-formula-pinned microVM
+# kernel + modules artifacts match the sha256 recorded at bump time BEFORE a real
+# build. These are the files the guest actually boots from (libexec Image/Image-4K
+# + lib/modules.squashfs); the toml URLs are declarative only (see the note above
+# VM_IMAGE_NAME). This catches a tampered/replaced libexec kernel that the toml URL
+# pin cannot cover. Best-effort: if the anylinuxfs prefix or files can't be located
+# (non-standard install), WARN and continue rather than block the user's build.
+# Returns 0 to proceed, 1 only on a positive hash MISMATCH (abort the build).
+_vm_verify_kernel() {
+  local pfx img img4k mods pfx_ok=0
+  pfx="$(brew --prefix anylinuxfs 2>/dev/null)"
+  [[ -n "$pfx" && -d "$pfx" ]] || pfx="$(brew --prefix 2>/dev/null)/opt/anylinuxfs"
+  [[ -n "$pfx" && -d "$pfx/libexec" ]] && pfx_ok=1
+  img="$pfx/libexec/Image"; img4k="$pfx/libexec/Image-4K"; mods="$pfx/lib/modules.squashfs"
+  # Genuinely uncheckable (non-standard install / no shasum): revert to the
+  # Homebrew formula's own sha256 pin (baseline) rather than block the build.
+  { [[ "$pfx_ok" -eq 1 ]] && command -v shasum >/dev/null 2>&1; } || { warn "$(t vm.kernelunknown)"; return 0; }
+  # Prefix IS resolvable — every pinned artifact must be PRESENT and MATCH. A
+  # missing expected artifact is anomalous (tamper/removal), so fail closed rather
+  # than silently skip it.
+  _vm_sha_ok() {   # <file> <expected> — 0 match, 1 missing-or-mismatch
+    local f="$1" want="$2" got
+    [[ -f "$f" ]] || { err "$(t vm.kernelbad "$f")"; return 1; }
+    got="$(shasum -a 256 "$f" 2>/dev/null | awk '{print $1}')"
+    [[ "$got" == "$want" ]] && return 0
+    err "$(t vm.kernelbad "$f")"; return 1
+  }
+  local bad=0
+  _vm_sha_ok "$img"   "$VM_KERNEL_SHA_IMAGE"    || bad=1
+  _vm_sha_ok "$img4k" "$VM_KERNEL_SHA_IMAGE_4K" || bad=1
+  _vm_sha_ok "$mods"  "$VM_KERNEL_SHA_MODULES"  || bad=1
+  [[ "$bad" -eq 1 ]] && return 1
+  ok "$(t vm.kernelok)"
+  return 0
+}
+
+# Build the pinned image. Dry-run PRINTS the command instead of running the
+# slow/networked build. anylinuxfs bakes a fixed default driver set (cryptsetup/
+# BitLocker, ntfs-3g, vfat, ext/btrfs via kernel modules, nfs …) — exactly the
+# broad FS coverage we want; there is no supported way to remove baked-in defaults
+# (`apk del` only manages user-ADDED custom packages), so we don't try to strip.
+_vm_build_image() {   # <dryrun:true|false>
   local dryrun="$1"
-  local bin="$VM_ROOT/bin/anylinuxfs"
-  # Run anylinuxfs as PURE ROOT so the rootfs store is root-owned /var/root/.anylinuxfs
-  # (it keys the store off SUDO_UID; under plain `sudo` it would use the invoking
-  # user's writable ~/.anylinuxfs — the S3 hole). Unset SUDO_*/KRUN_HOME, HOME=/var/root.
-  local pure=(env -u SUDO_USER -u SUDO_UID -u KRUN_HOME "HOME=/var/root")
-  # Best-effort strip of volume managers / filesystems we never mount; KEEP
-  # cryptsetup (BitLocker/LUKS), ntfs-3g, nfs (the mount transport). A package not
-  # present is non-fatal (`apk del` errors on a missing pkg; the pin+root-own is
-  # the goal, strip is surface-reduction).
-  local del=(btrfs-progs lvm2 zfs mdadm)
   if [[ "$dryrun" == "true" ]]; then
     step "$(t vm.dryrun)"
-    printf '  %s %q image install %s\n' "${pure[*]}" "$bin" "$VM_IMAGE_NAME"
-    printf '  %s %q apk del %s   # best-effort\n' "${pure[*]}" "$bin" "${del[*]}"
+    printf '  anylinuxfs image install %s\n' "$VM_IMAGE_NAME"
     warn "$(t vm.dryskip)"
     return 0
   fi
+  # Defensively verify the local pinned kernel/modules before the real build.
+  _vm_verify_kernel || return 1
   step "$(t vm.buildstep)"
-  "${pure[@]}" "$bin" image install "$VM_IMAGE_NAME" || return 1
-  step "$(t vm.stripstep)"
-  "${pure[@]}" "$bin" apk del "${del[@]}" || warn "$(t vm.stripwarn)"
+  anylinuxfs image install "$VM_IMAGE_NAME" || return 1
   return 0
 }
 
-# Harden ownership of the staged tree + root store, then write the manifest.
-_vm_finalize() {   # <dryrun:true|false>
-  local dryrun="$1"
-  step "$(t vm.harden "$VM_STORE")"
-  # The staged /Library tree AND the root store (/var/root/.anylinuxfs, root's own
-  # home): force root:wheel + strip group/other write. /var/root is already 0750
-  # root, but be defensive about the freshly-unpacked rootfs contents.
-  chown -R root:wheel "$VM_ROOT" 2>/dev/null || return 1
-  chmod -R go-w "$VM_ROOT" 2>/dev/null || return 1
-  if [[ -d "$VM_STORE" ]]; then
-    chown -R root:wheel "$VM_STORE" 2>/dev/null || return 1
-    chmod -R go-w "$VM_STORE" 2>/dev/null || return 1
-  fi
-
-  # Manifest: sha256 of the staged binary, kernel, modules.squashfs, and (when the
-  # rootfs was actually built) the built rootfs tree. In dry-run the rootfs does
-  # not exist yet, so only the staged binaries are hashed.
-  local tmpman; tmpman="$(mktemp)" || return 1
-  {
-    _vm_sha "$VM_ROOT/bin/anylinuxfs" "bin/anylinuxfs"
-    _vm_sha "$VM_ROOT/libexec/Image" "libexec/Image"
-    _vm_sha "$VM_ROOT/libexec/Image-4K" "libexec/Image-4K"
-    _vm_sha "$VM_ROOT/lib/modules.squashfs" "lib/modules.squashfs"
-    # Built rootfs tree hash: a stable digest over the file list + hashes.
-    if [[ "$dryrun" != "true" && -d "$VM_ROOTFS" ]]; then
-      local treehash
-      treehash="$(cd "$VM_ROOTFS" && find . -type f -exec shasum -a 256 {} + 2>/dev/null \
-        | sort | shasum -a 256 | awk '{print $1}')"
-      [[ -n "$treehash" ]] && printf '%s  rootfs-tree\n' "$treehash"
-    fi
-  } > "$tmpman"
-  install -o root -g wheel -m 0644 "$tmpman" "$VM_MANIFEST" || { rm -f "$tmpman"; return 1; }
-  rm -f "$tmpman"
-  ok "$(t vm.manifest "$VM_MANIFEST")"
-  return 0
+# Does `anylinuxfs image list` currently show bltusb-min? (return 0/1, no output)
+_vm_image_listed() {
+  anylinuxfs image list 2>/dev/null | grep -q "$VM_IMAGE_NAME"
 }
 
-# Core build pipeline shared by `vm build` and `vm update`. Fails CLOSED: on any
-# error it warns loudly (guidance to inspect + remove the half-staged tree)
-# rather than silently leaving a broken/half-owned /Library tree.
-_vm_do_build() {   # <cellar-prefix> <digest> <dryrun:true|false>
-  local prefix="$1" digest="$2" dryrun="$3"
-  if ! _vm_stage_tree "$prefix" "$digest" \
-     || ! _vm_build_rootfs "$dryrun" \
-     || ! _vm_finalize "$dryrun"; then
-    warn "$(t vm.failclean "$VM_ROOT" "$VM_BASE")"
-    return 1
-  fi
-  # FAIL CLOSED on the known anylinuxfs blocker: it pins its rootfs store to the
-  # CONSOLE user (SCDynamicStore) with no override, so on a machine with a
-  # logged-in user it builds the rootfs into ~USER/.anylinuxfs (USER-WRITABLE),
-  # not /var/root. A root daemon booting a user-writable rootfs is exactly the LPE
-  # verifiedBackendPath refuses — so if the built rootfs is not root-owned, this
-  # backend is NOT safe and we must not claim success. (See docs/BACKEND-HARDENING-SCOPE.md.)
-  if [[ "$dryrun" != "true" ]] && ! _vm_chain_hardened "$VM_ROOTFS"; then
-    warn "$(t vm.rootfsuser "$VM_ROOTFS")"
-    warn "$(t vm.failclean "$VM_ROOT" "$VM_BASE")"
-    return 1
-  fi
-  ok "$(t vm.buildok)"
-  info "${C_DIM}$(t vm.wire "$VM_ROOT/bin/anylinuxfs" "$VM_STORE")${C_RESET}"
-  return 0
-}
-
-# Resolve the digest to pin from --digest (if given + valid) or the invoking
-# user's index.json. Prints the digest on stdout; dies with guidance if none.
+# Resolve the digest to pin: --digest (if given + valid) else the index.json the
+# base image was last resolved to. Prints the digest on stdout; dies if neither.
 _vm_pick_digest() {   # <digest-arg-or-empty>
   local arg="$1" dig
   if [[ -n "$arg" ]]; then
@@ -2000,90 +1976,103 @@ _vm_pick_digest() {   # <digest-arg-or-empty>
     printf '%s' "$arg"; return 0
   fi
   info "$(t vm.digestask)" >&2
-  dig="$(_vm_resolve_index_digest 2>/dev/null || true)"
+  dig="$(_vm_index_digest 2>/dev/null || true)"
   [[ -n "$dig" ]] || die "$(t vm.nodigest)"
-  info "$(t vm.digestfrom "$(_vm_invoking_user)" "$dig")" >&2
+  info "$(t vm.digestfrom "$(_vm_store)/alpine/oci/index.json" "$dig")" >&2
   printf '%s' "$dig"
+}
+
+# Warn (never block) if the installed anylinuxfs isn't the pinned/reviewed version.
+_vm_version_warn() {
+  local av; av="$(anylinuxfs --version 2>/dev/null | awk '{print $NF}')"
+  [[ -n "$av" && "$av" != "$ANYLINUXFS_PINNED_VERSION" ]] \
+    && warn "$(t vm.verwarn "$av" "$ANYLINUXFS_PINNED_VERSION")"
+  return 0
 }
 
 cmd_vm() {
   local sub="${1:-}"; shift || true
-  local digest_arg="" dryrun="false" a
+  local digest_arg="" dryrun="false" want_digest="false" a
   for a in "$@"; do
+    if [[ "$want_digest" == "true" ]]; then digest_arg="$a"; want_digest="false"; continue; fi
     case "$a" in
       --dry-run)  dryrun="true" ;;
-      --digest)   : ;;  # value is the NEXT arg; handled below
+      --digest)   want_digest="true" ;;   # value is the NEXT arg
       sha256:*)   digest_arg="$a" ;;
       *)          warn "ignoring unknown arg: $a" ;;
     esac
   done
-  # Also honor the env dry-run hook (used by the smoke test) so a real build is
-  # never triggered under test.
+  # Env dry-run hook (used by the smoke test) so a real build is never triggered.
   [[ "${BLTUSB_VM_DRYRUN:-}" == "1" ]] && dryrun="true"
 
   case "$sub" in
     build)
-      _vm_require_root build
-      have_anylinuxfs || die "$(t vm.nobackend)"
-      local prefix; prefix="$(_vm_cellar_prefix)" || die "$(t vm.badprefix "$(command -v anylinuxfs 2>/dev/null || echo anylinuxfs)")"
-      info "$(t vm.prefix "$prefix")"
-      # Version awareness (warn only — never block staging).
-      local av; av="$(KRUN_HOME=/dev/null "$prefix/bin/anylinuxfs" --version 2>/dev/null | awk '{print $2}')"
-      [[ -n "$av" && "$av" != "$ANYLINUXFS_PINNED_VERSION" ]] \
-        && warn "$(t vm.verwarn "$av" "$ANYLINUXFS_PINNED_VERSION")"
+      ensure_installed
+      _vm_version_warn
       local digest; digest="$(_vm_pick_digest "$digest_arg")" || exit 1
-      _vm_do_build "$prefix" "$digest" "$dryrun" || exit 1
+      ok "$(t vm.pinned "$digest")"
+      _vm_write_toml "$digest" || exit 1
+      _vm_build_image "$dryrun" || exit 1
+      ok "$(t vm.buildok)"
+      info "$(t vm.keep)"
+      info "${C_DIM}$(t vm.usenote "$(_vm_store)/$VM_IMAGE_NAME" "$digest")${C_RESET}"
       ;;
     update)
-      _vm_require_root update
-      have_anylinuxfs || die "$(t vm.nobackend)"
-      local prefix; prefix="$(_vm_cellar_prefix)" || die "$(t vm.badprefix "$(command -v anylinuxfs 2>/dev/null || echo anylinuxfs)")"
-      local old; old="$(_vm_staged_digest 2>/dev/null || true)"
-      [[ -n "$old" ]] || die "$(t vm.up.nocurrent "$VM_ROOT/etc/anylinuxfs.toml")"
+      ensure_installed
+      _vm_version_warn
+      local old; old="$(_vm_pinned_digest 2>/dev/null || true)"
+      [[ -n "$old" ]] || die "$(t vm.up.nocurrent "$ANYLINUXFS_TOML")"
       step "$(t vm.up.resolve)"
+      # Refresh ~/.anylinuxfs/alpine so index.json carries the fresh digest (unless
+      # the user pinned one explicitly with --digest). Dry-run skips the refresh.
+      if [[ -z "$digest_arg" && "$dryrun" != "true" ]]; then
+        anylinuxfs image install alpine-latest || true
+      fi
       local new; new="$(_vm_pick_digest "$digest_arg")" || exit 1
       if [[ "$new" == "$old" ]]; then
-        info "$(t vm.up.same "$old")"
+        ok "$(t vm.up.same "$old")"
         return 0
       fi
       info "$(t vm.up.oldnew "$old" "$new")"
       printf '%s' "${C_CYN}$(t vm.up.confirm)${C_RESET}"
       local ans; read -r ans
       case "${ans:-N}" in [yY]*) : ;; *) die "$(t vm.up.cancelled)" ;; esac
-      _vm_do_build "$prefix" "$new" "$dryrun" || exit 1
+      ok "$(t vm.pinned "$new")"
+      _vm_write_toml "$new" || exit 1
+      _vm_build_image "$dryrun" || exit 1
+      ok "$(t vm.buildok)"
+      info "$(t vm.keep)"
+      if [[ "$dryrun" != "true" ]]; then
+        if _vm_image_listed; then ok "$(t vm.up.verify)"; else warn "$(t vm.up.verifyfail)"; fi
+      fi
       ;;
     status|"")
       step "$(t vm.st.header)"
-      if [[ ! -d "$VM_ROOT" ]]; then
+      local built
+      if _vm_image_listed || [[ -d "$(_vm_rootfs)" ]]; then built="$(t vm.st.present)"; else built="$(t vm.st.absent)"; fi
+      printf '  %-16s: %s\n' "$(t vm.st.built)" "$built"
+      local digest; digest="$(_vm_pinned_digest 2>/dev/null || true)"
+      printf '  %-16s: %s\n' "$(t vm.st.digest)" "${digest:-$(t vm.st.none)}"
+      # FS coverage present in the built rootfs (user-space; no sudo). Glob the two
+      # sbin dirs and keep the mount helpers + cryptsetup — these show which
+      # filesystems the microVM can actually mount ("一切基本驱动").
+      local rootfs drivers="" d base seen=""
+      rootfs="$(_vm_rootfs)"
+      for d in "$rootfs"/sbin/* "$rootfs"/usr/sbin/*; do
+        # -L too: guest mount helpers (mount.ntfs -> /bin/ntfs-3g) are absolute
+        # symlinks that only resolve inside the VM, so -e alone would drop them.
+        [[ -e "$d" || -L "$d" ]] || continue
+        base="${d##*/}"
+        case "$base" in
+          cryptsetup|mount.*)
+            case " $seen " in *" $base "*) ;; *) seen="$seen $base"; drivers="$drivers$base " ;; esac
+            ;;
+        esac
+      done
+      printf '  %-16s: %s\n' "$(t vm.st.drivers)" "${drivers:-$(t vm.st.none)}"
+      if [[ "$built" == "$(t vm.st.absent)" ]]; then
+        echo
         info "$(t vm.st.notbuilt)"
-        return 0
-      fi
-      local present digest chainok
-      # Staged backend + ownership.
-      if _vm_node_hardened "$VM_ROOT/bin/anylinuxfs"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
-      printf '  %-24s: %s\n' "$(t vm.st.root)" "$present"
-      printf '  %-24s: %s\n' "" "${C_DIM}${VM_ROOT}${C_RESET}"
-      # Pinned digest (from the staged toml).
-      digest="$(_vm_staged_digest 2>/dev/null || true)"
-      printf '  %-24s: %s\n' "$(t vm.st.digest)" "${digest:-$(t vm.st.none)}"
-      # Rootfs store lives under root-only /var/root — only inspectable as root.
-      if [[ "$(id -u)" -ne 0 ]]; then
-        present="$(t vm.st.rootonly)"
-      elif [[ -d "$VM_ROOTFS" ]]; then
-        if _vm_chain_hardened "$VM_ROOTFS"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
-      else present="$(t vm.st.absent)"; fi
-      printf '  %-24s: %s\n' "$(t vm.st.home)" "$present"
-      # Manifest.
-      if [[ -f "$VM_MANIFEST" ]]; then present="$(t vm.st.present)"; else present="$(t vm.st.absent)"; fi
-      printf '  %-24s: %s\n' "$(t vm.st.manifest)" "$present"
-      # Whole-chain verdict (mirror the helper's verifiedBackendPath).
-      if _vm_chain_hardened "$VM_ROOT/bin/anylinuxfs"; then chainok="$(t vm.st.ownok)"; else chainok="$(t vm.st.ownbad)"; fi
-      printf '  %-24s: %s\n' "$(t vm.st.chain)" "$chainok"
-      echo
-      if _vm_chain_hardened "$VM_ROOT/bin/anylinuxfs" && [[ -f "$VM_ROOT/bin/anylinuxfs" ]]; then
-        ok "$(t vm.st.accept)"
-      else
-        warn "$(t vm.st.reject)"
       fi
       ;;
     *) die "$(t vm.usage)" ;;

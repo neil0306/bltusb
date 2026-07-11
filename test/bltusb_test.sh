@@ -197,58 +197,92 @@ smoke() {
 }
 
 # ---------------------------------------------------------------------------
-# smoke: vm (Mode-B backend staging). All offline / no-root / no real build:
-#   * `vm status` with nothing staged reports "not built" and exits 0
+# smoke: vm (bltusb-min pinned/minimal microVM). All USER-SPACE, offline, NO sudo,
+# NO real `anylinuxfs image install`:
+#   * `vm status` with nothing built reports "not built" and exits 0
 #   * `vm <bad-subcommand>` exits non-zero
-#   * `vm build`/`vm update` as a NON-root user are refused (EUID guard) with the
-#     `sudo bltusb vm build` guidance, and exit non-zero — WITHOUT ever running a
-#     real build (we never call it as root, and BLTUSB_VM_DRYRUN=1 double-guards)
-#   * the dry-run BUILD MECHANICS (dispatch + arg-parse) are reachable: the
-#     `--dry-run` / `--digest` argv is accepted by the parser (still refused
-#     pre-build by the root guard, proving the guard fires before any staging).
-# Never attempts a real `anylinuxfs image install` (slow / networked / root).
+#   * a `--dry-run` `vm build` against an ISOLATED temp anylinuxfs.toml exercises
+#     the digest-pin + toml-edit logic (idempotent add/replace of [images.bltusb-min],
+#     a .bak, well-formedness) WITHOUT hitting the network or running a real build.
+#     A tiny PATH stub stands in for the `anylinuxfs` binary (only `--version` is
+#     invoked on the dry-run path; the slow install/apk commands are merely PRINTED).
 # ---------------------------------------------------------------------------
 smoke_vm() {
-  hdr "smoke: vm status with nothing staged reports not-built, exits 0"
-  # Isolate: the real staged tree (if any) lives at a fixed /Library path we do
-  # NOT touch; `vm status` only READS it, so this is safe either way. We assert
-  # the exit code is 0 regardless, and that a not-built machine says so.
+  local vt vh
+  vt="$(mktemp -d)"; vh="$vt/home"; mkdir -p "$vh"
+  # A minimal PATH stub for anylinuxfs so ensure_installed passes, the version warn
+  # is exercised, and `image list` returns nothing (it echoes a non-matching line).
+  # This is REQUIRED for the status check too: `anylinuxfs image list` reads the
+  # real console-user store (SCDynamicStore, not $HOME), so without the stub a
+  # bltusb-min built for real on this box would leak into the isolated test.
+  local sb="$vt/bin"; mkdir -p "$sb"
+  cat > "$sb/anylinuxfs" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+  --version) echo "anylinuxfs 0.18.0" ;;
+  *) echo "STUB anylinuxfs $*" ; exit 0 ;;
+esac
+STUB
+  chmod +x "$sb/anylinuxfs"
+
+  hdr "smoke: vm status with nothing built reports not-built, exits 0"
+  # Point the store + toml at an empty isolated HOME and the stub on PATH so status
+  # reads a not-built machine regardless of what's really installed. No sudo.
   local out rc=0
-  out="$(BLTUSB_LANG=en "$BIN" vm status 2>&1)" || rc=$?
+  out="$(PATH="$sb:$PATH" HOME="$vh" BLTUSB_ANYLINUXFS_TOML="$vt/none.toml" BLTUSB_LANG=en "$BIN" vm status 2>&1)" || rc=$?
   if [[ $rc -eq 0 ]]; then ok "vm status exits 0"; else no "vm status non-zero ($rc)"; fi
   case "$out" in
-    *"not built"*) ok "vm status reports not-built (no staged backend)" ;;
-    *"status"*)    ok "vm status renders (a staged backend is present on this box)" ;;
-    *) no "vm status produced no recognizable output: $out" ;;
+    *"not built"*) ok "vm status reports not-built (nothing in the isolated store)" ;;
+    *) no "vm status produced no not-built output: $out" ;;
   esac
 
   hdr "smoke: vm bad subcommand exits non-zero"
   if BLTUSB_LANG=en "$BIN" vm not-a-subcommand >/dev/null 2>&1; then no "vm bad subcommand should fail"; else ok "vm bad subcommand exits non-zero"; fi
 
-  hdr "smoke: vm build/update as non-root are refused with sudo guidance"
-  # Only meaningful when the test is NOT running as root (CI + normal dev).
-  if [[ "$(id -u)" -eq 0 ]]; then
-    skip "running as root — cannot exercise the non-root refusal (never runs a real build here)"
-  else
-    local brc=0
-    out="$(BLTUSB_VM_DRYRUN=1 BLTUSB_LANG=en "$BIN" vm build --dry-run 2>&1)" || brc=$?
-    if [[ $brc -ne 0 ]]; then ok "vm build refused (non-zero) without root"; else no "vm build did not refuse as non-root"; fi
-    case "$out" in *"sudo bltusb vm build"*) ok "vm build prints sudo guidance" ;; *) no "vm build missing sudo guidance: $out" ;; esac
-    # The arg parser must accept --digest <val> --dry-run and STILL refuse (guard
-    # fires before any /Library staging) — proving no half-stage on the refusal path.
-    local urc=0
-    out="$(BLTUSB_LANG=en "$BIN" vm update --digest sha256:$(printf '0%.0s' {1..64}) --dry-run 2>&1)" || urc=$?
-    if [[ $urc -ne 0 ]]; then ok "vm update refused (non-zero) without root, --digest/--dry-run parsed"; else no "vm update did not refuse as non-root"; fi
-    case "$out" in *"sudo bltusb vm update"*) ok "vm update prints sudo guidance" ;; *) no "vm update missing sudo guidance: $out" ;; esac
-    # Fail-closed invariant: a refused non-root build must NOT create the staged tree.
-    if [[ -e "/Library/Application Support/bltusb/anylinuxfs" ]]; then
-      # Present is only acceptable if a REAL prior build made it (root-owned). A
-      # non-root refusal can never create it; we only flag if this test could have.
-      skip "staged tree exists (pre-existing real build) — non-root refusal cannot have created it"
-    else
-      ok "no staged /Library tree created by the refused non-root build"
-    fi
-  fi
+  hdr "smoke: vm build --dry-run edits an isolated toml (no sudo, no real build)"
+  # The dry-run path never runs the real install (it PRINTS).
+  # A realistic source toml carrying an alpine-latest entry (kernel URLs to copy)
+  # plus an unrelated entry we must NOT clobber.
+  local toml="$vt/anylinuxfs.toml"
+  cat > "$toml" <<'TOML'
+[images.alpine-latest]
+base_dir = "alpine"
+docker_ref = "alpine:latest"
+kernel.image_url = "https://example.invalid/Image.tar.gz"
+kernel.modules_url = "https://example.invalid/modules.squashfs"
+os_type = "Linux"
+
+[images.alpine-edge]
+base_dir = "alpine-edge"
+docker_ref = "alpine:edge"
+kernel.image_url = "https://example.invalid/Image.tar.gz"
+kernel.modules_url = "https://example.invalid/modules.squashfs"
+os_type = "Linux"
+
+[network]
+helper = "vmnet"
+TOML
+  local dig; dig="sha256:$(printf 'a%.0s' {1..64})"
+  local brc=0
+  out="$(PATH="$sb:$PATH" HOME="$vh" BLTUSB_ANYLINUXFS_TOML="$toml" BLTUSB_VM_DRYRUN=1 \
+         BLTUSB_LANG=en "$BIN" vm build --digest "$dig" --dry-run 2>&1)" || brc=$?
+  if [[ $brc -eq 0 ]]; then ok "vm build --dry-run exits 0 (no sudo, no real build)"; else no "vm build --dry-run non-zero ($brc): $out"; fi
+  case "$out" in *"DRY-RUN"*) ok "vm build --dry-run printed the commands (no real install)" ;; *) no "vm build --dry-run missing DRY-RUN marker: $out" ;; esac
+  case "$out" in *"$dig"*) ok "vm build pinned the explicit --digest" ;; *) no "vm build did not surface the pinned digest: $out" ;; esac
+  # The toml-edit landed: pinned block present, exactly once, other entries intact.
+  if grep -q '^\[images\.bltusb-min\]' "$toml"; then ok "toml gained [images.bltusb-min]"; else no "toml missing [images.bltusb-min]"; fi
+  if grep -qF "docker_ref = \"alpine@$dig\"" "$toml"; then ok "toml pinned alpine@<digest>"; else no "toml missing pinned docker_ref"; fi
+  if grep -q '^\[images\.alpine-edge\]' "$toml" && grep -q '^\[network\]' "$toml"; then ok "toml preserved other entries"; else no "toml clobbered unrelated entries"; fi
+  if [[ -f "$toml.bak" ]]; then ok "toml .bak was created"; else no "toml .bak missing"; fi
+  # Idempotency: a second build with a DIFFERENT digest must replace (not duplicate).
+  local dig2; dig2="sha256:$(printf 'b%.0s' {1..64})"
+  PATH="$sb:$PATH" HOME="$vh" BLTUSB_ANYLINUXFS_TOML="$toml" BLTUSB_VM_DRYRUN=1 \
+    BLTUSB_LANG=en "$BIN" vm build --digest "$dig2" --dry-run >/dev/null 2>&1 || true
+  local nblk; nblk="$(grep -cE '^\[images\.bltusb-min\][[:space:]]*$' "$toml" 2>/dev/null || echo 0)"
+  if [[ "$nblk" -eq 1 ]]; then ok "re-build replaced (not duplicated) the block"; else no "re-build produced $nblk bltusb-min blocks"; fi
+  if grep -qF "docker_ref = \"alpine@$dig2\"" "$toml" && ! grep -qF "alpine@$dig\"" "$toml"; then ok "re-build re-pinned to the new digest"; else no "re-build did not re-pin"; fi
+
+  rm -rf "$vt"
 }
 
 # ---------------------------------------------------------------------------
@@ -414,6 +448,33 @@ EOF
   case "$escout" in
     *'\\\"'*) ok "_as_escape escapes backslash+quote (breakout neutralized)" ;;
     *) no "_as_escape leaves AppleScript breakout unescaped (got: $escout)" ;;
+  esac
+
+  hdr "smoke: _as_escape folds newline/CR/control chars (osascript-wedge defense)"
+  # A volume label carrying a raw newline/CR would otherwise terminate the
+  # AppleScript `-e` string literal → osascript compile error → the auto-unlock
+  # GUI prompt silently wedges. _as_escape must fold C0 control bytes to a space
+  # so the escaped label is a single line with no embedded LF/CR/TAB. Build the
+  # probe in a file (a label WITH real newline/CR/tab bytes) and inspect the bytes.
+  local nlf nlout; nlf="$td/nlprobe.sh"
+  {
+    sed -n '/^_as_escape()/,/^}/p' "$BIN"
+    # label = A<LF>B<CR>C<TAB>D ; print escaped output byte-for-byte, then check.
+    # shellcheck disable=SC2016,SC2028  # probe body: escapes/vars expand at run time, NOT here
+    printf '%s\n' 'lbl="$(printf '"'"'A\nB\rC\tD'"'"')"'
+    # shellcheck disable=SC2016  # probe body: $lbl expands at run time, NOT here
+    printf '%s\n' 'out="$(_as_escape "$lbl")"'
+    # shellcheck disable=SC2016  # probe body: $out expands at run time, NOT here
+    printf '%s\n' 'printf "%s" "$out" | LC_ALL=C tr "\n\r\t" "NRT"'
+  } > "$nlf"
+  # Any surviving LF/CR/TAB would have been rewritten to N/R/T by the tr above ONLY
+  # if _as_escape failed to fold them; if _as_escape worked, they are already spaces
+  # and the output is "A B C D" (no N/R/T markers).
+  nlout="$(bash "$nlf" 2>/dev/null)"
+  case "$nlout" in
+    *N*|*R*|*T*) no "_as_escape left a raw newline/CR/tab in the label (got: [$nlout])" ;;
+    "A B C D")   ok "_as_escape folded newline/CR/tab to space (got: [$nlout])" ;;
+    *)           no "_as_escape produced unexpected output (got: [$nlout])" ;;
   esac
 
   rm -rf "$td"
