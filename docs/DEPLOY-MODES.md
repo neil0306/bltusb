@@ -160,13 +160,19 @@ hardened backend — byte-for-byte unaffected by the Mode-B additions.
 **Mode B (personal):**
 - macOS 13+, the Command Line Tools Swift toolchain (no Xcode needed).
 - Homebrew `anylinuxfs` installed at `/opt/homebrew/bin/anylinuxfs`.
-- One `sudo` to run `install-selfhosted.sh`. Nothing else; runtime is zero-sudo.
-- Accept the residuals: the Homebrew backend is **ad-hoc signed** and keeps a
-  **user-writable `~/.anylinuxfs` rootfs** — the R-supply / S3 residuals in
-  [`AUTO-UNLOCK-RISK.md`](AUTO-UNLOCK-RISK.md) §4 stand. Mode B does **not** ship
-  the hardened MDM backend; `verifyBackendIntegrity` in Mode B only checks the
-  fixed path exists and is not group/other-writable — a personal-machine best
-  effort, not the Mode-A signature+hash verification.
+- One `sudo` to run `install-selfhosted.sh`. Nothing else for the zero-sudo IPC.
+- ⚠️ **`mount` is fail-closed until you stage a root-owned backend.** `list`/`probe`
+  work now, but the daemon **refuses to `mount`** with a stock Homebrew backend:
+  `verifiedBackendPath()` resolves the symlink and requires the canonical backend
+  **and every ancestor directory** to be uid-0-owned and not group/other-writable,
+  execing **only** that verified canonical path (never the user-controlled symlink).
+  A Homebrew `anylinuxfs` is **user-owned** (Cellar) with a **user-writable
+  `~/.anylinuxfs` rootfs**, so it fails the check — running it as root would be a
+  **local privilege-escalation boundary** (R-supply / S3), so we do not. Making
+  Mode B `mount` work **safely** needs the **entire** anylinuxfs trust chain
+  (binary + rootfs + microVM deps) staged **root-owned, non-user-writable, verified
+  before exec** — the Phase-2 supply-chain hardening (SRAA §5 S1–S3 / §9 Alt-A),
+  **not yet automated**. See §2 and [`AUTO-UNLOCK-RISK.md`](AUTO-UNLOCK-RISK.md) §4.
 
 **Mode A (organization / distributable):**
 - Apple Developer Program membership (paid), full Xcode (~15–40 GB), an MDM.

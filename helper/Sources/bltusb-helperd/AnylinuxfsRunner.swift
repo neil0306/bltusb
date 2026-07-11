@@ -28,7 +28,7 @@ enum AnylinuxfsRunner {
     /// Two builds, one invariant (fixed absolute path):
     ///
     ///   · Mode A (production, default): the hardened, root-owned, non-user-
-    ///     writable, MDM-installed backend. `verifyBackendIntegrity` checks its
+    ///     writable, MDM-installed backend. `verifiedBackendPath` verifies its
     ///     Developer-ID signature + rootfs hash before every exec (S1–S3, S7).
     ///
     ///   · Mode B (`-D BLTUSB_SELFHOSTED`, personal self-hosted): the user-
@@ -68,13 +68,23 @@ enum AnylinuxfsRunner {
     /// S1–S3; DEPLOY-MODES.md). Metadata ops (list/probe) never exec the backend,
     /// so they are unaffected. NOTE: a fully TOCTOU-safe design must exec the
     /// verified root-owned file by descriptor; that hardening is Phase-2.
-    static func verifyBackendIntegrity() -> Bool {
+    /// Returns the CANONICAL, verified path the caller must exec — or nil if the
+    /// backend fails integrity (fail closed). The caller MUST exec exactly this
+    /// returned path, NOT `binaryPath`: `binaryPath` may be a user-controlled
+    /// symlink, and execing it would let a user point it at a root-owned file
+    /// during verification, then re-point it at attacker code before exec (TOCTOU).
+    /// We resolve the symlink ONCE, verify the canonical file + every ancestor is
+    /// root-owned & non-writable, and hand back the canonical path. Because that
+    /// chain is root-owned, a non-root user cannot alter it between here and exec.
+    static func verifiedBackendPath() -> String? {
         #if BLTUSB_SELFHOSTED
-        return backendChainIsRootOwned(binaryPath)
+        let canonical = (binaryPath as NSString).resolvingSymlinksInPath
+        return backendChainIsRootOwned(canonical) ? canonical : nil
         #else
         // Real impl: SecStaticCode + SecCodeCheckValidity against the pinned
-        // designated requirement, plus a sha256 match of the rootfs image.
-        return true
+        // designated requirement, plus a sha256 match of the rootfs image; then
+        // return the canonical verified path (ideally exec by descriptor).
+        return binaryPath
         #endif
     }
 
@@ -106,14 +116,16 @@ enum AnylinuxfsRunner {
     /// child, zeroed after the child is spawned. Returns backendFailure on a
     /// non-zero exit. `secret` is consumed and zeroed by the caller regardless.
     static func mount(deviceID: String, fsType: FSType, mode: MountMode, secret: Secret?) -> Result<Void, HelperError> {
-        guard verifyBackendIntegrity() else { return .failure(.backendFailure) }
+        // Exec ONLY the canonical, verified path — never `binaryPath` (a possibly
+        // user-controlled symlink) — to close the verify-vs-exec TOCTOU.
+        guard let exe = verifiedBackendPath() else { return .failure(.backendFailure) }
         let argv = Validators.anylinuxfsMountArgv(deviceID: deviceID, fsType: fsType, mode: mode)
 
         // TODO(signing/deploy): actually spawning this needs root + the deployed
         // hardened backend. Under the CLT-only build the binary is absent, so
         // Process.run() throws and we return backendFailure (fail closed).
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: binaryPath)
+        p.executableURL = URL(fileURLWithPath: exe)
         p.arguments = argv
         p.standardInput = FileHandle.nullDevice   // never consume our stdin
 
@@ -135,10 +147,10 @@ enum AnylinuxfsRunner {
     }
 
     static func unmount(mountpoint: String) -> Result<Void, HelperError> {
-        guard verifyBackendIntegrity() else { return .failure(.backendFailure) }
+        guard let exe = verifiedBackendPath() else { return .failure(.backendFailure) }
         let argv = Validators.anylinuxfsUnmountArgv(mountpoint: mountpoint)
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: binaryPath)
+        p.executableURL = URL(fileURLWithPath: exe)
         p.arguments = argv
         p.standardInput = FileHandle.nullDevice
         do { try p.run() } catch { return .failure(.backendFailure) }
