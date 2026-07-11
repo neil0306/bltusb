@@ -268,10 +268,12 @@ t() {
     vm.stripstep)     en="Stripping unneeded packages (keep cryptsetup / ntfs-3g / nfs)"; zh_cn="正在剥离不需要的软件包（保留 cryptsetup / ntfs-3g / nfs）"; zh_tw="正在剝離不需要的套件（保留 cryptsetup / ntfs-3g / nfs）" ;;
     vm.dryrun)        en="DRY-RUN — printing the commands instead of running them:"; zh_cn="DRY-RUN —— 只打印命令而不执行："; zh_tw="DRY-RUN —— 只列印命令而不執行：" ;;
     vm.dryskip)       en="DRY-RUN: skipped the real (slow / networked / root) build + strip"; zh_cn="DRY-RUN：已跳过真实（慢/联网/root）的构建与剥离"; zh_tw="DRY-RUN：已跳過真實（慢/聯網/root）的建置與剝離" ;;
-    vm.harden)        en="Hardening ownership (root:wheel, non-world-writable) of %s"; zh_cn="正在加固 %s 的所有权（root:wheel，非全局可写）"; zh_tw="正在加固 %s 的所有權（root:wheel，非全域可寫）" ;;
+    vm.harden)        en="Hardening ownership (root:wheel, non-world-writable) of the staged tree + %s"; zh_cn="正在加固暂存树 + %s 的所有权（root:wheel，非全局可写）"; zh_tw="正在加固暫存樹 + %s 的所有權（root:wheel，非全域可寫）" ;;
+    vm.stripwarn)     en="package strip incomplete (a package to drop was not installed) — continuing; the pin is unaffected"; zh_cn="精简包未完全完成（某个待删除的包未安装）—— 继续；固定不受影响"; zh_tw="精簡套件未完全完成（某個待刪除的套件未安裝）—— 繼續；固定不受影響" ;;
+    vm.rootfsuser)    en="BLOCKED: anylinuxfs built the rootfs at %s, which is USER-writable — it pins its store to the console user (SCDynamicStore) with no override, so it will not build a root-owned rootfs. A root daemon booting a user-writable rootfs is a local privilege escalation, so this is refused. See docs/BACKEND-HARDENING-SCOPE.md for the options (upstream store-path override, or a from-scratch/libkrun rootfs)."; zh_cn="已阻断：anylinuxfs 把 rootfs 建到了 %s，该目录用户可写 —— 它把 store 固定到控制台用户（SCDynamicStore）且无覆盖手段，因此无法构建 root 拥有的 rootfs。root 守护进程启动用户可写的 rootfs 是本地提权，故拒绝。选项见 docs/BACKEND-HARDENING-SCOPE.md（上游加 store 路径覆盖，或从零/libkrun 自建 rootfs）。"; zh_tw="已阻斷：anylinuxfs 把 rootfs 建到了 %s，該目錄使用者可寫 —— 它把 store 固定到主控台使用者（SCDynamicStore）且無覆蓋手段，因此無法建置 root 擁有的 rootfs。root 守護程序啟動使用者可寫的 rootfs 是本地提權，故拒絕。選項見 docs/BACKEND-HARDENING-SCOPE.md（上游加 store 路徑覆蓋，或從零/libkrun 自建 rootfs）。" ;;
     vm.manifest)      en="Wrote sha256 manifest %s"; zh_cn="已写入 sha256 清单 %s"; zh_tw="已寫入 sha256 清單 %s" ;;
     vm.buildok)       en="vm build complete"; zh_cn="vm build 完成"; zh_tw="vm build 完成" ;;
-    vm.wire)          en="Phase-2 wiring (separate): point AnylinuxfsRunner Mode-B binaryPath at %s with KRUN_HOME=%s"; zh_cn="Phase-2 接线（另行处理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，并设置 KRUN_HOME=%s"; zh_tw="Phase-2 接線（另行處理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，並設定 KRUN_HOME=%s" ;;
+    vm.wire)          en="Phase-2 wiring (separate): point AnylinuxfsRunner Mode-B binaryPath at %s, run it PURE ROOT (unset SUDO_UID, HOME=/var/root) so it uses the root-owned store %s"; zh_cn="Phase-2 接线（另行处理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，以纯 root（清除 SUDO_UID，HOME=/var/root）运行，使其使用 root 拥有的 store %s"; zh_tw="Phase-2 接線（另行處理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，以純 root（清除 SUDO_UID，HOME=/var/root）執行，使其使用 root 擁有的 store %s" ;;
     vm.failclean)     en="vm build FAILED — the staged tree under %s may be incomplete/half-owned. Inspect it and remove it before retrying: sudo rm -rf %s"; zh_cn="vm build 失败 —— %s 下的暂存树可能不完整/半拥有。请检查后删除再重试：sudo rm -rf %s"; zh_tw="vm build 失敗 —— %s 下的暫存樹可能不完整/半擁有。請檢查後刪除再重試：sudo rm -rf %s" ;;
     vm.up.resolve)    en="Re-resolving alpine:latest to a new digest"; zh_cn="正在重新解析 alpine:latest 到新的 digest"; zh_tw="正在重新解析 alpine:latest 到新的 digest" ;;
     vm.up.oldnew)     en="Digest change:  OLD %s  ->  NEW %s"; zh_cn="digest 变更：  旧 %s  ->  新 %s"; zh_tw="digest 變更：  舊 %s  ->  新 %s" ;;
@@ -281,7 +283,8 @@ t() {
     vm.up.nocurrent)  en="No currently-pinned digest found in %s (run 'sudo bltusb vm build' first)"; zh_cn="在 %s 中未找到当前固定的 digest（请先运行 'sudo bltusb vm build'）"; zh_tw="在 %s 中未找到目前固定的 digest（請先執行 'sudo bltusb vm build'）" ;;
     vm.st.header)     en="bltusb vm (Mode-B backend) status"; zh_cn="bltusb vm（Mode-B 后端）状态"; zh_tw="bltusb vm（Mode-B 後端）狀態" ;;
     vm.st.root)       en="Staged backend"; zh_cn="暂存后端"; zh_tw="暫存後端" ;;
-    vm.st.home)       en="Rootfs home (KRUN_HOME)"; zh_cn="Rootfs home (KRUN_HOME)"; zh_tw="Rootfs home (KRUN_HOME)" ;;
+    vm.st.home)       en="Rootfs store (/var/root, root-owned)"; zh_cn="Rootfs store (/var/root，root 拥有)"; zh_tw="Rootfs store (/var/root，root 擁有)" ;;
+    vm.st.rootonly)   en="root-only (/var/root) — run: sudo bltusb vm status"; zh_cn="仅 root 可见 (/var/root) —— 请运行：sudo bltusb vm status"; zh_tw="僅 root 可見 (/var/root) —— 請執行：sudo bltusb vm status" ;;
     vm.st.manifest)   en="Manifest"; zh_cn="清单"; zh_tw="清單" ;;
     vm.st.digest)     en="Pinned digest"; zh_cn="固定 digest"; zh_tw="固定 digest" ;;
     vm.st.chain)      en="Trust chain (helper verifiedBackendPath check)"; zh_cn="信任链（helper verifiedBackendPath 检查）"; zh_tw="信任鏈（helper verifiedBackendPath 檢查）" ;;
@@ -1727,10 +1730,15 @@ cmd_autounlock() {
 # are uid-0-owned (what verifiedBackendPath requires, fail-closed).
 # ---------------------------------------------------------------------------
 VM_BASE="/Library/Application Support/bltusb"
-VM_ROOT="$VM_BASE/anylinuxfs"                 # staged install (bin/libexec/lib/share/etc)
-VM_ROOTFS_HOME="$VM_BASE/vm-home"             # KRUN_HOME — root-owned rootfs home
+VM_ROOT="$VM_BASE/anylinuxfs"                 # staged install (bin/libexec/lib/share/etc), root-owned
 VM_MANIFEST="$VM_BASE/vm-manifest.txt"        # sha256 manifest, root:wheel 0644
 VM_IMAGE_NAME="bltusb-min"
+# anylinuxfs keys its per-user rootfs store off SUDO_UID (the invoking user's
+# ~/.anylinuxfs), NOT KRUN_HOME. So we run it PURE ROOT (unset SUDO_UID/SUDO_USER,
+# HOME=/var/root) and the rootfs lands in ROOT's own home — root-owned and
+# non-user-writable. This is the same store the pure-root LaunchDaemon will use.
+VM_STORE="/var/root/.anylinuxfs"
+VM_ROOTFS="$VM_STORE/$VM_IMAGE_NAME/rootfs"
 
 # EUID guard: build/update mutate a root-owned /Library tree, so require root.
 _vm_require_root() {   # <subcommand-for-message>
@@ -1895,31 +1903,42 @@ _vm_stage_tree() {   # <cellar-prefix> <pinned-digest>
 _vm_build_rootfs() {   # <dryrun:true|false>
   local dryrun="$1"
   local bin="$VM_ROOT/bin/anylinuxfs"
-  # The stripped packages: drop volume managers / filesystems we do not mount;
-  # KEEP cryptsetup (BitLocker/LUKS), ntfs-3g, and nfs (the mount transport).
-  local del=(btrfs-progs lvm2 zfs xfsprogs)
+  # Run anylinuxfs as PURE ROOT so the rootfs store is root-owned /var/root/.anylinuxfs
+  # (it keys the store off SUDO_UID; under plain `sudo` it would use the invoking
+  # user's writable ~/.anylinuxfs — the S3 hole). Unset SUDO_*/KRUN_HOME, HOME=/var/root.
+  local pure=(env -u SUDO_USER -u SUDO_UID -u KRUN_HOME "HOME=/var/root")
+  # Best-effort strip of volume managers / filesystems we never mount; KEEP
+  # cryptsetup (BitLocker/LUKS), ntfs-3g, nfs (the mount transport). A package not
+  # present is non-fatal (`apk del` errors on a missing pkg; the pin+root-own is
+  # the goal, strip is surface-reduction).
+  local del=(btrfs-progs lvm2 zfs mdadm)
   if [[ "$dryrun" == "true" ]]; then
     step "$(t vm.dryrun)"
-    printf '  KRUN_HOME=%q %q image install %s\n' "$VM_ROOTFS_HOME" "$bin" "$VM_IMAGE_NAME"
-    printf '  KRUN_HOME=%q %q apk del %s\n' "$VM_ROOTFS_HOME" "$bin" "${del[*]}"
+    printf '  %s %q image install %s\n' "${pure[*]}" "$bin" "$VM_IMAGE_NAME"
+    printf '  %s %q apk del %s   # best-effort\n' "${pure[*]}" "$bin" "${del[*]}"
     warn "$(t vm.dryskip)"
     return 0
   fi
   step "$(t vm.buildstep)"
-  KRUN_HOME="$VM_ROOTFS_HOME" "$bin" image install "$VM_IMAGE_NAME" || return 1
+  "${pure[@]}" "$bin" image install "$VM_IMAGE_NAME" || return 1
   step "$(t vm.stripstep)"
-  KRUN_HOME="$VM_ROOTFS_HOME" "$bin" apk del "${del[@]}" || return 1
+  "${pure[@]}" "$bin" apk del "${del[@]}" || warn "$(t vm.stripwarn)"
   return 0
 }
 
-# Harden ownership of the rootfs home + built tree, then write the manifest.
+# Harden ownership of the staged tree + root store, then write the manifest.
 _vm_finalize() {   # <dryrun:true|false>
   local dryrun="$1"
-  install -d -o root -g wheel -m 0755 "$VM_ROOTFS_HOME" || return 1
-  step "$(t vm.harden "$VM_ROOTFS_HOME")"
-  # chown -R root:wheel + strip group/other write across the staged tree + home.
-  chown -R root:wheel "$VM_ROOT" "$VM_ROOTFS_HOME" 2>/dev/null || return 1
-  chmod -R go-w "$VM_ROOT" "$VM_ROOTFS_HOME" 2>/dev/null || return 1
+  step "$(t vm.harden "$VM_STORE")"
+  # The staged /Library tree AND the root store (/var/root/.anylinuxfs, root's own
+  # home): force root:wheel + strip group/other write. /var/root is already 0750
+  # root, but be defensive about the freshly-unpacked rootfs contents.
+  chown -R root:wheel "$VM_ROOT" 2>/dev/null || return 1
+  chmod -R go-w "$VM_ROOT" 2>/dev/null || return 1
+  if [[ -d "$VM_STORE" ]]; then
+    chown -R root:wheel "$VM_STORE" 2>/dev/null || return 1
+    chmod -R go-w "$VM_STORE" 2>/dev/null || return 1
+  fi
 
   # Manifest: sha256 of the staged binary, kernel, modules.squashfs, and (when the
   # rootfs was actually built) the built rootfs tree. In dry-run the rootfs does
@@ -1931,9 +1950,9 @@ _vm_finalize() {   # <dryrun:true|false>
     _vm_sha "$VM_ROOT/libexec/Image-4K" "libexec/Image-4K"
     _vm_sha "$VM_ROOT/lib/modules.squashfs" "lib/modules.squashfs"
     # Built rootfs tree hash: a stable digest over the file list + hashes.
-    if [[ "$dryrun" != "true" && -d "$VM_ROOTFS_HOME/.anylinuxfs" ]]; then
+    if [[ "$dryrun" != "true" && -d "$VM_ROOTFS" ]]; then
       local treehash
-      treehash="$(cd "$VM_ROOTFS_HOME" && find .anylinuxfs -type f -exec shasum -a 256 {} + 2>/dev/null \
+      treehash="$(cd "$VM_ROOTFS" && find . -type f -exec shasum -a 256 {} + 2>/dev/null \
         | sort | shasum -a 256 | awk '{print $1}')"
       [[ -n "$treehash" ]] && printf '%s  rootfs-tree\n' "$treehash"
     fi
@@ -1955,8 +1974,19 @@ _vm_do_build() {   # <cellar-prefix> <digest> <dryrun:true|false>
     warn "$(t vm.failclean "$VM_ROOT" "$VM_BASE")"
     return 1
   fi
+  # FAIL CLOSED on the known anylinuxfs blocker: it pins its rootfs store to the
+  # CONSOLE user (SCDynamicStore) with no override, so on a machine with a
+  # logged-in user it builds the rootfs into ~USER/.anylinuxfs (USER-WRITABLE),
+  # not /var/root. A root daemon booting a user-writable rootfs is exactly the LPE
+  # verifiedBackendPath refuses — so if the built rootfs is not root-owned, this
+  # backend is NOT safe and we must not claim success. (See docs/BACKEND-HARDENING-SCOPE.md.)
+  if [[ "$dryrun" != "true" ]] && ! _vm_chain_hardened "$VM_ROOTFS"; then
+    warn "$(t vm.rootfsuser "$VM_ROOTFS")"
+    warn "$(t vm.failclean "$VM_ROOT" "$VM_BASE")"
+    return 1
+  fi
   ok "$(t vm.buildok)"
-  info "${C_DIM}$(t vm.wire "$VM_ROOT/bin/anylinuxfs" "$VM_ROOTFS_HOME")${C_RESET}"
+  info "${C_DIM}$(t vm.wire "$VM_ROOT/bin/anylinuxfs" "$VM_STORE")${C_RESET}"
   return 0
 }
 
@@ -2036,9 +2066,11 @@ cmd_vm() {
       # Pinned digest (from the staged toml).
       digest="$(_vm_staged_digest 2>/dev/null || true)"
       printf '  %-24s: %s\n' "$(t vm.st.digest)" "${digest:-$(t vm.st.none)}"
-      # Rootfs home + ownership.
-      if [[ -d "$VM_ROOTFS_HOME" ]]; then
-        if _vm_node_hardened "$VM_ROOTFS_HOME"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
+      # Rootfs store lives under root-only /var/root — only inspectable as root.
+      if [[ "$(id -u)" -ne 0 ]]; then
+        present="$(t vm.st.rootonly)"
+      elif [[ -d "$VM_ROOTFS" ]]; then
+        if _vm_chain_hardened "$VM_ROOTFS"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
       else present="$(t vm.st.absent)"; fi
       printf '  %-24s: %s\n' "$(t vm.st.home)" "$present"
       # Manifest.

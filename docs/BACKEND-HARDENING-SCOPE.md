@@ -97,11 +97,36 @@ directly (bypassing anylinuxfs entirely) is a separate, much larger project and 
   `KRUN_BLOCK_ROOT`** — `KRUN_HOME` can pin the rootfs to an explicit root-owned
   path (cleaner than relying on root's `$HOME`=/var/root).
 
-**Still to confirm during implementation** (cheaper, not architectural):
-- Whether `sudo … anylinuxfs image install <custom>` builds the rootfs into a
-  root-owned path (via `KRUN_HOME` or root `$HOME`) — needs a real (slow, networked)
-  build.
-- Whether `apk del`-stripping is reliable vs. building minimal from a smaller base.
+**⛔ Real-build outcome (verified 2026-07-11) — a hard BLOCKER on the rootfs:**
+Two real `sudo bltusb vm build` runs proved:
+- ✅ The **pin + custom-image + strip mechanics all work**: it pulled the pinned
+  `alpine@sha256:e7a1a92…`, installed cryptsetup/ntfs-3g/nfs, and (with a tolerant,
+  corrected list) stripped btrfs/lvm/zfs — exit 0.
+- ⛔ **anylinuxfs builds the rootfs into the CONSOLE user's home, user-writable,
+  and there is NO override.** It resolves the store via **`SCDynamicStore` (the
+  console/login user)** — NOT `SUDO_UID`, NOT `HOME`, NOT `KRUN_HOME`. Even run
+  pure-root (`env -u SUDO_USER -u SUDO_UID HOME=/var/root`) it still built into
+  `/Users/ning/.anylinuxfs/bltusb-min/rootfs` (owned `ning`). `config`/env expose
+  no store-path setting. So a root daemon booting that rootfs is a **local
+  privilege escalation** — exactly what `verifiedBackendPath` refuses.
+
+**Consequence:** the "pinned + minimal + root-owned via anylinuxfs's own build"
+path can pin the digest (S1 ✓) and root-own the **binaries** (partial), but
+**cannot root-own the ROOTFS** — the part the daemon boots. So it does **not**
+close the Mode B LPE by itself. `bltusb vm build` now **fails closed** with this
+explanation rather than falsely reporting success.
+
+**Real options from here:**
+1. **Upstream anylinuxfs change** — ask for a store-path / store-user override
+   (env or config). Small upstream patch; then this whole approach works. *Recommended
+   first move* (open an issue / PR on nohajc/anylinuxfs).
+2. **From-scratch / libkrun-direct rootfs** — build our own minimal root-owned
+   rootfs and boot it via libkrun directly, bypassing anylinuxfs's store logic
+   (uses the already-pinned libkrunfw kernel + modules). Full control; the larger
+   project previously deferred.
+3. **Accept the limitation** — Mode B `mount` stays fail-closed; document that a
+   safe self-hosted mount needs option 1 or 2. (The pinned-digest + root-owned-binary
+   staging still stands as partial hardening / a foundation for option 1.)
 
 ## 6. Delivery shape (for maintainer decision)
 
