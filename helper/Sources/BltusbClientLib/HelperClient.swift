@@ -94,7 +94,13 @@ public final class HelperClient: @unchecked Sendable {
         xpc_dictionary_set_string(req, "mountpoint", mountpoint)
         xpc_dictionary_set_string(req, "mode", mode.rawValue)
         if !passphrase.isEmpty {
-            passphrase.withUnsafeBytes { xpc_dictionary_set_data(req, "passphrase", $0.baseAddress, $0.count) }
+            // Explicitly unwrap baseAddress (non-nil for a non-empty buffer): some
+            // SDK toolchains import xpc_dictionary_set_data's pointer as non-optional.
+            passphrase.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    xpc_dictionary_set_data(req, "passphrase", base, raw.count)
+                }
+            }
         }
         let reply = xpc_connection_send_message_with_reply_sync(conn, req)
         // Zero our copy of the secret immediately after the message is sent.
