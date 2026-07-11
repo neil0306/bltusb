@@ -108,7 +108,18 @@ if [[ $DRY_RUN -eq 1 ]]; then
 else
   bash test/bltusb_test.sh smoke >/dev/null
 fi
-ok "shellcheck + smoke passed"
+# CI-equivalent run: the GitHub Test job runs the smoke suite on LINUX where
+# Homebrew is absent. Re-run it here with brew/Homebrew masked off PATH so a
+# load-time macOS-only call (e.g. a bare `$(brew ...)` under `set -e`) is caught
+# BEFORE we tag & publish — not by a red CI email afterwards.
+say "Smoke (CI-equivalent: Homebrew masked, mirrors the Linux runner)"
+if [[ $DRY_RUN -eq 1 ]]; then
+  run env PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash test/bltusb_test.sh smoke
+else
+  env PATH="/usr/bin:/bin:/usr/sbin:/sbin" bash test/bltusb_test.sh smoke >/dev/null \
+    || die "CI-equivalent (brew-masked) smoke failed — would fail on the Linux CI runner; aborting release"
+fi
+ok "shellcheck + smoke (local + CI-equivalent) passed"
 
 # ---- 3. commit, tag, push ----
 say "Commit, tag, push"

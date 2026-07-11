@@ -1782,7 +1782,11 @@ VM_KERNEL_SHA_MODULES="86ed485e4e46ba265261a55e25c92ea15f6118003fcec95a8bafde8ad
 if [[ -n "${BLTUSB_ANYLINUXFS_TOML:-}" ]]; then
   ANYLINUXFS_TOML="$BLTUSB_ANYLINUXFS_TOML"
 else
-  ANYLINUXFS_TOML="$(brew --prefix 2>/dev/null)/etc/anylinuxfs.toml"
+  # `|| true`: brew is absent on non-macOS (e.g. the Linux CI runner); without it
+  # the failing command substitution trips `set -e` at LOAD time and aborts EVERY
+  # invocation (version/help included) before the dispatch. anylinuxfs/vm is
+  # macOS-only anyway, so an empty prefix here is harmless (falls back below).
+  ANYLINUXFS_TOML="$(brew --prefix 2>/dev/null || true)/etc/anylinuxfs.toml"
   [[ -f "$ANYLINUXFS_TOML" ]] || ANYLINUXFS_TOML="/opt/homebrew/etc/anylinuxfs.toml"
 fi
 
