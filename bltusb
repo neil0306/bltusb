@@ -248,6 +248,51 @@ t() {
     au.self.stopfail) en="WARNING: could not fully stop the self-managed auto-unlock agent — it may still be loaded; try: launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock"; zh_cn="警告：未能完全停止自管理的自动解锁代理 —— 它可能仍在加载；可尝试：launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock"; zh_tw="警告：未能完全停止自管理的自動解鎖代理 —— 它可能仍在載入；可嘗試：launchctl bootout gui/\$(id -u)/co.carryai.bltusb.autounlock" ;;
     au.dedup.failed)  en="Refusing to run two auto-unlock daemons: could not deactivate the other mechanism. Run \`bltusb autounlock uninstall\` first, then retry"; zh_cn="拒绝同时运行两个自动解锁守护进程：无法停用另一种机制。请先运行 \`bltusb autounlock uninstall\`，然后重试"; zh_tw="拒絕同時運行兩個自動解鎖守護程序：無法停用另一種機制。請先執行 \`bltusb autounlock uninstall\`，然後重試" ;;
     au.anylinuxfs.ver) en="NOTE: anylinuxfs %s differs from the security-reviewed version %s. Auto-unlock still works, but the supply-chain review in docs/AUTO-UNLOCK-RISK.md targets the reviewed version"; zh_cn="注意：anylinuxfs %s 与经过安全审查的版本 %s 不一致。自动解锁仍可用，但 docs/AUTO-UNLOCK-RISK.md 的供应链审查是针对已审查版本做的"; zh_tw="注意：anylinuxfs %s 與經過安全審查的版本 %s 不一致。自動解鎖仍可用，但 docs/AUTO-UNLOCK-RISK.md 的供應鏈審查是針對已審查版本做的" ;;
+    vm.usage)         en="Usage: bltusb vm <build|update|status> [--digest sha256:… | --dry-run]"; zh_cn="用法：bltusb vm <build|update|status> [--digest sha256:… | --dry-run]"; zh_tw="用法：bltusb vm <build|update|status> [--digest sha256:… | --dry-run]" ;;
+    vm.needroot)      en="This needs root. Re-run: sudo bltusb vm %s"; zh_cn="此操作需要 root 权限。请重新运行：sudo bltusb vm %s"; zh_tw="此操作需要 root 權限。請重新執行：sudo bltusb vm %s" ;;
+    vm.nobackend)     en="anylinuxfs not found — install it first (bltusb install)"; zh_cn="未找到 anylinuxfs —— 请先安装（bltusb install）"; zh_tw="未找到 anylinuxfs —— 請先安裝（bltusb install）" ;;
+    vm.badprefix)     en="Cannot locate the installed anylinuxfs Cellar prefix from %s"; zh_cn="无法从 %s 定位已安装的 anylinuxfs Cellar 前缀"; zh_tw="無法從 %s 定位已安裝的 anylinuxfs Cellar 前綴" ;;
+    vm.prefix)        en="Staging source (Cellar prefix): %s"; zh_cn="暂存来源（Cellar 前缀）：%s"; zh_tw="暫存來源（Cellar 前綴）：%s" ;;
+    vm.verwarn)       en="Installed anylinuxfs %s differs from the pinned/reviewed version %s — staging anyway"; zh_cn="已安装的 anylinuxfs %s 与固定/已审查版本 %s 不一致 —— 仍继续暂存"; zh_tw="已安裝的 anylinuxfs %s 與固定/已審查版本 %s 不一致 —— 仍繼續暫存" ;;
+    vm.notomlsrc)     en="Source anylinuxfs.toml not found at %s — cannot copy the pinned kernel URLs"; zh_cn="源 anylinuxfs.toml 不在 %s —— 无法复制固定的内核 URL"; zh_tw="源 anylinuxfs.toml 不在 %s —— 無法複製固定的核心 URL" ;;
+    vm.nokernelurl)   en="Could not read kernel.image_url / kernel.modules_url from %s (the pinned libkrunfw URLs)"; zh_cn="无法从 %s 读取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）"; zh_tw="無法從 %s 讀取 kernel.image_url / kernel.modules_url（固定的 libkrunfw URL）" ;;
+    vm.digestask)     en="Resolving the base image digest to pin"; zh_cn="正在解析要固定的基础镜像 digest"; zh_tw="正在解析要固定的基礎鏡像 digest" ;;
+    vm.digestfrom)    en="Pinned digest from %s: %s"; zh_cn="从 %s 解析到的固定 digest：%s"; zh_tw="從 %s 解析到的固定 digest：%s" ;;
+    vm.digestarg)     en="Using explicit --digest: %s"; zh_cn="使用显式 --digest：%s"; zh_tw="使用明確的 --digest：%s" ;;
+    vm.baddigest)     en="Bad --digest %s — expected sha256:<64 hex>"; zh_cn="无效的 --digest %s —— 应为 sha256:<64 位十六进制>"; zh_tw="無效的 --digest %s —— 應為 sha256:<64 位十六進位>" ;;
+    vm.nodigest)      en="Cannot resolve a base image digest. Run 'anylinuxfs init' (or 'anylinuxfs image install alpine-latest') once as your normal user first, or pass --digest sha256:…"; zh_cn="无法解析基础镜像 digest。请先以普通用户身份运行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 传入"; zh_tw="無法解析基礎鏡像 digest。請先以普通使用者身份執行一次 'anylinuxfs init'（或 'anylinuxfs image install alpine-latest'），或用 --digest sha256:… 傳入" ;;
+    vm.staging)       en="Staging anylinuxfs root-owned into %s"; zh_cn="正在把 anylinuxfs 以 root 拥有方式暂存到 %s"; zh_tw="正在把 anylinuxfs 以 root 擁有方式暫存到 %s" ;;
+    vm.staged)        en="Staged root-owned backend at %s"; zh_cn="已在 %s 暂存 root 拥有的后端"; zh_tw="已在 %s 暫存 root 擁有的後端" ;;
+    vm.writetoml)     en="Writing root-owned image config %s (pinned [images.bltusb-min])"; zh_cn="正在写入 root 拥有的镜像配置 %s（固定 [images.bltusb-min]）"; zh_tw="正在寫入 root 擁有的鏡像設定 %s（固定 [images.bltusb-min]）" ;;
+    vm.buildstep)     en="Building the pinned minimal rootfs (image install bltusb-min)"; zh_cn="正在构建固定的最小 rootfs（image install bltusb-min）"; zh_tw="正在建置固定的最小 rootfs（image install bltusb-min）" ;;
+    vm.stripstep)     en="Stripping unneeded packages (keep cryptsetup / ntfs-3g / nfs)"; zh_cn="正在剥离不需要的软件包（保留 cryptsetup / ntfs-3g / nfs）"; zh_tw="正在剝離不需要的套件（保留 cryptsetup / ntfs-3g / nfs）" ;;
+    vm.dryrun)        en="DRY-RUN — printing the commands instead of running them:"; zh_cn="DRY-RUN —— 只打印命令而不执行："; zh_tw="DRY-RUN —— 只列印命令而不執行：" ;;
+    vm.dryskip)       en="DRY-RUN: skipped the real (slow / networked / root) build + strip"; zh_cn="DRY-RUN：已跳过真实（慢/联网/root）的构建与剥离"; zh_tw="DRY-RUN：已跳過真實（慢/聯網/root）的建置與剝離" ;;
+    vm.harden)        en="Hardening ownership (root:wheel, non-world-writable) of %s"; zh_cn="正在加固 %s 的所有权（root:wheel，非全局可写）"; zh_tw="正在加固 %s 的所有權（root:wheel，非全域可寫）" ;;
+    vm.manifest)      en="Wrote sha256 manifest %s"; zh_cn="已写入 sha256 清单 %s"; zh_tw="已寫入 sha256 清單 %s" ;;
+    vm.buildok)       en="vm build complete"; zh_cn="vm build 完成"; zh_tw="vm build 完成" ;;
+    vm.wire)          en="Phase-2 wiring (separate): point AnylinuxfsRunner Mode-B binaryPath at %s with KRUN_HOME=%s"; zh_cn="Phase-2 接线（另行处理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，并设置 KRUN_HOME=%s"; zh_tw="Phase-2 接線（另行處理）：把 AnylinuxfsRunner 的 Mode-B binaryPath 指向 %s，並設定 KRUN_HOME=%s" ;;
+    vm.failclean)     en="vm build FAILED — the staged tree under %s may be incomplete/half-owned. Inspect it and remove it before retrying: sudo rm -rf %s"; zh_cn="vm build 失败 —— %s 下的暂存树可能不完整/半拥有。请检查后删除再重试：sudo rm -rf %s"; zh_tw="vm build 失敗 —— %s 下的暫存樹可能不完整/半擁有。請檢查後刪除再重試：sudo rm -rf %s" ;;
+    vm.up.resolve)    en="Re-resolving alpine:latest to a new digest"; zh_cn="正在重新解析 alpine:latest 到新的 digest"; zh_tw="正在重新解析 alpine:latest 到新的 digest" ;;
+    vm.up.oldnew)     en="Digest change:  OLD %s  ->  NEW %s"; zh_cn="digest 变更：  旧 %s  ->  新 %s"; zh_tw="digest 變更：  舊 %s  ->  新 %s" ;;
+    vm.up.same)       en="New digest equals the currently pinned one (%s) — nothing to update"; zh_cn="新 digest 与当前固定的一致（%s）—— 无需更新"; zh_tw="新 digest 與目前固定的一致（%s）—— 無需更新" ;;
+    vm.up.confirm)    en="Re-pin to the NEW digest and rebuild? [y/N] "; zh_cn="固定为新的 digest 并重新构建吗？[y/N] "; zh_tw="固定為新的 digest 並重新建置嗎？[y/N] " ;;
+    vm.up.cancelled)  en="Update cancelled — the pin is unchanged"; zh_cn="更新已取消 —— 固定未变更"; zh_tw="更新已取消 —— 固定未變更" ;;
+    vm.up.nocurrent)  en="No currently-pinned digest found in %s (run 'sudo bltusb vm build' first)"; zh_cn="在 %s 中未找到当前固定的 digest（请先运行 'sudo bltusb vm build'）"; zh_tw="在 %s 中未找到目前固定的 digest（請先執行 'sudo bltusb vm build'）" ;;
+    vm.st.header)     en="bltusb vm (Mode-B backend) status"; zh_cn="bltusb vm（Mode-B 后端）状态"; zh_tw="bltusb vm（Mode-B 後端）狀態" ;;
+    vm.st.root)       en="Staged backend"; zh_cn="暂存后端"; zh_tw="暫存後端" ;;
+    vm.st.home)       en="Rootfs home (KRUN_HOME)"; zh_cn="Rootfs home (KRUN_HOME)"; zh_tw="Rootfs home (KRUN_HOME)" ;;
+    vm.st.manifest)   en="Manifest"; zh_cn="清单"; zh_tw="清單" ;;
+    vm.st.digest)     en="Pinned digest"; zh_cn="固定 digest"; zh_tw="固定 digest" ;;
+    vm.st.chain)      en="Trust chain (helper verifiedBackendPath check)"; zh_cn="信任链（helper verifiedBackendPath 检查）"; zh_tw="信任鏈（helper verifiedBackendPath 檢查）" ;;
+    vm.st.notbuilt)   en="not built (run: sudo bltusb vm build)"; zh_cn="未构建（运行：sudo bltusb vm build）"; zh_tw="未建置（執行：sudo bltusb vm build）" ;;
+    vm.st.present)    en="present"; zh_cn="存在"; zh_tw="存在" ;;
+    vm.st.absent)     en="absent"; zh_cn="不存在"; zh_tw="不存在" ;;
+    vm.st.ownok)      en="root-owned, non-world-writable ✓"; zh_cn="root 拥有、非全局可写 ✓"; zh_tw="root 擁有、非全域可寫 ✓" ;;
+    vm.st.ownbad)     en="NOT root-owned / world-writable ✗ — the helper will REFUSE it"; zh_cn="非 root 拥有 / 全局可写 ✗ —— helper 会拒绝它"; zh_tw="非 root 擁有 / 全域可寫 ✗ —— helper 會拒絕它" ;;
+    vm.st.accept)     en="The helper's Mode-B check WILL accept this backend"; zh_cn="helper 的 Mode-B 检查会接受此后端"; zh_tw="helper 的 Mode-B 檢查會接受此後端" ;;
+    vm.st.reject)     en="The helper's Mode-B check will REFUSE this backend (fix ownership / rebuild)"; zh_cn="helper 的 Mode-B 检查会拒绝此后端（请修复所有权 / 重新构建）"; zh_tw="helper 的 Mode-B 檢查會拒絕此後端（請修復所有權 / 重新建置）" ;;
+    vm.st.none)       en="(none)"; zh_cn="（无）"; zh_tw="（無）" ;;
     *)                en="$k"; zh_cn="$k"; zh_tw="$k" ;;
   esac
   case "$BLTUSB_LANG_CODE" in
@@ -1673,6 +1718,347 @@ cmd_autounlock() {
 }
 
 # ---------------------------------------------------------------------------
+# Command: vm — stage a PINNED + MINIMAL + ROOT-OWNED anylinuxfs backend so the
+# Phase-2 helper's verifiedBackendPath() (Mode B) accepts it. See
+# docs/BACKEND-HARDENING-SCOPE.md and docs/DEPLOY-MODES.md (§2 invariant 7).
+#
+# The staged tree lives entirely under /Library/Application Support/bltusb —
+# root:wheel, non-world-writable — so the resolved backend AND every ancestor
+# are uid-0-owned (what verifiedBackendPath requires, fail-closed).
+# ---------------------------------------------------------------------------
+VM_BASE="/Library/Application Support/bltusb"
+VM_ROOT="$VM_BASE/anylinuxfs"                 # staged install (bin/libexec/lib/share/etc)
+VM_ROOTFS_HOME="$VM_BASE/vm-home"             # KRUN_HOME — root-owned rootfs home
+VM_MANIFEST="$VM_BASE/vm-manifest.txt"        # sha256 manifest, root:wheel 0644
+VM_IMAGE_NAME="bltusb-min"
+
+# EUID guard: build/update mutate a root-owned /Library tree, so require root.
+_vm_require_root() {   # <subcommand-for-message>
+  [[ "${EUID:-$(id -u)}" -eq 0 ]] || die "$(t vm.needroot "$1")"
+}
+
+# Validate a "sha256:<64 hex>" digest string (returns 0/1, no output).
+_vm_is_digest() { [[ "$1" =~ ^sha256:[0-9a-f]{64}$ ]]; }
+
+# The invoking (non-root) user whose ~/.anylinuxfs holds the resolved digest.
+# Under sudo that is $SUDO_USER; else the current user.
+_vm_invoking_user() { printf '%s' "${SUDO_USER:-$(id -un)}"; }
+_vm_invoking_home() {
+  local u; u="$(_vm_invoking_user)"
+  # dscl is the authoritative home lookup on macOS; fall back to eval ~user.
+  dscl . -read "/Users/$u" NFSHomeDirectory 2>/dev/null | awk '{print $2}' | grep . \
+    || eval printf '%s' "~$u" 2>/dev/null
+}
+
+# Resolve the Cellar prefix (grandparent of bin/anylinuxfs) of the installed
+# backend. Prints the prefix on success; returns 1 with nothing on failure.
+_vm_cellar_prefix() {
+  have_anylinuxfs || return 1
+  local bin real prefix
+  bin="$(command -v anylinuxfs)" || return 1
+  real="$(_realpath "$bin" 2>/dev/null || printf '%s' "$bin")"
+  # .../<prefix>/bin/anylinuxfs -> grandparent = <prefix>
+  prefix="$(cd "$(dirname "$real")/.." 2>/dev/null && pwd -P)" || return 1
+  [[ -n "$prefix" && -x "$prefix/bin/anylinuxfs" ]] || return 1
+  printf '%s' "$prefix"
+}
+
+# Read the current pinned base digest from ~USER/.anylinuxfs/alpine/oci/index.json
+# (the digest anylinuxfs last resolved "alpine:latest" to). Prints sha256:… or ''.
+_vm_resolve_index_digest() {
+  local home idx dig
+  home="$(_vm_invoking_home 2>/dev/null || true)"
+  [[ -n "$home" ]] || return 1
+  idx="$home/.anylinuxfs/alpine/oci/index.json"
+  [[ -f "$idx" ]] || return 1
+  # Extract the first sha256:<64hex> without needing jq (index.json is tiny).
+  dig="$(grep -oE 'sha256:[0-9a-f]{64}' "$idx" 2>/dev/null | head -1)"
+  [[ -n "$dig" ]] && printf '%s' "$dig"
+}
+
+# The digest currently pinned in the STAGED toml (if any). Prints sha256:… or ''.
+_vm_staged_digest() {
+  local toml="$VM_ROOT/etc/anylinuxfs.toml"
+  [[ -f "$toml" ]] || return 1
+  grep -oE 'alpine@sha256:[0-9a-f]{64}' "$toml" 2>/dev/null | head -1 | sed 's/^alpine@//'
+}
+
+# Read a kernel.<key>_url value verbatim from the alpine-latest entry of a toml.
+# Prints the URL (unquoted) or ''.
+_vm_toml_kernel_url() {   # <toml> <image_url|modules_url>
+  awk -v want="$2" '
+    /^\[images\.alpine-latest\]/ { inblk=1; next }
+    /^\[/ { inblk=0 }
+    inblk && $0 ~ ("^kernel\\." want "[[:space:]]*=") {
+      sub(/^[^=]*=[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit
+    }' "$1" 2>/dev/null
+}
+
+# Is <path> uid-0-owned AND not group/other-writable? (Mirrors the helper's
+# per-node check.) Returns 0 when hardened, 1 otherwise.
+_vm_node_hardened() {   # <path>
+  local owner perm
+  owner="$(stat -f '%u' "$1" 2>/dev/null)" || return 1
+  [[ "$owner" == "0" ]] || return 1
+  perm="$(stat -f '%p' "$1" 2>/dev/null)" || return 1
+  # low 3 octal digits = ugo; reject if group (020) or other (002) write bit set.
+  local go="${perm: -3}"
+  (( (0$go & 0022) == 0 ))
+}
+
+# Mirror verifiedBackendPath: the resolved backend AND every ancestor directory
+# up to / must be uid-0-owned + non-group/other-writable. Returns 0 if the whole
+# chain is hardened. Prints nothing.
+_vm_chain_hardened() {   # <path>
+  local p; p="$(_realpath "$1" 2>/dev/null || printf '%s' "$1")"
+  [[ -n "$p" ]] || return 1
+  while :; do
+    _vm_node_hardened "$p" || return 1
+    [[ "$p" == "/" ]] && break
+    p="$(dirname "$p")"
+  done
+  return 0
+}
+
+# sha256 helper (macOS: shasum -a 256). Prints "<hash>  <label>" or nothing.
+_vm_sha() {   # <file> <label>
+  [[ -f "$1" ]] || return 0
+  local h; h="$(shasum -a 256 "$1" 2>/dev/null | awk '{print $1}')" || return 0
+  [[ -n "$h" ]] && printf '%s  %s\n' "$h" "$2"
+}
+
+# Stage the whole install root-owned and write the pinned toml. This is the
+# filesystem-mutating part that is SAFE to run in dry-run structure checks only
+# when actually root; callers gate it. On ANY failure it returns non-zero so the
+# caller can warn loudly (fail-closed cleanup guidance) rather than leave a
+# half-owned /Library tree.
+_vm_stage_tree() {   # <cellar-prefix> <pinned-digest>
+  local prefix="$1" digest="$2"
+  local srctoml="$prefix/etc/anylinuxfs.toml"
+  # Prefer the Homebrew etc toml for the pinned kernel URLs (the Cellar prefix
+  # may not carry an etc/ toml); fall back to the staged source if present.
+  [[ -f "$srctoml" ]] || srctoml="/opt/homebrew/etc/anylinuxfs.toml"
+  [[ -f "$srctoml" ]] || { err "$(t vm.notomlsrc "$srctoml")"; return 1; }
+  local kimg kmod
+  kimg="$(_vm_toml_kernel_url "$srctoml" image_url)"
+  kmod="$(_vm_toml_kernel_url "$srctoml" modules_url)"
+  [[ -n "$kimg" && -n "$kmod" ]] || { err "$(t vm.nokernelurl "$srctoml")"; return 1; }
+
+  step "$(t vm.staging "$VM_ROOT")"
+  # Create the base + root, root:wheel 0755, up front so every ancestor is owned.
+  install -d -o root -g wheel -m 0755 "$VM_BASE" || return 1
+  install -d -o root -g wheel -m 0755 "$VM_ROOT" || return 1
+  local sub
+  for sub in bin libexec lib share etc; do
+    [[ -d "$prefix/$sub" || "$sub" == etc ]] || continue
+    install -d -o root -g wheel -m 0755 "$VM_ROOT/$sub" || return 1
+  done
+  # Copy bin/libexec/lib/share verbatim, root-owned. Use a manifest-friendly copy:
+  # install(1) per-file so ownership/mode are set atomically as each file lands.
+  local f rel
+  for sub in bin libexec lib share; do
+    [[ -d "$prefix/$sub" ]] || continue
+    while IFS= read -r f; do
+      rel="${f#"$prefix"/}"
+      install -d -o root -g wheel -m 0755 "$VM_ROOT/$(dirname "$rel")" || return 1
+      install -o root -g wheel -m 0755 "$f" "$VM_ROOT/$rel" || return 1
+    done < <(find "$prefix/$sub" -type f 2>/dev/null)
+  done
+  [[ -x "$VM_ROOT/bin/anylinuxfs" ]] || { err "$(t vm.staged "$VM_ROOT")"; return 1; }
+
+  step "$(t vm.writetoml "$VM_ROOT/etc/anylinuxfs.toml")"
+  # Root-owned toml defining our pinned image plus the alpine-latest entry (so
+  # `image list` still parses). Written to a temp then installed root-owned 0644.
+  local tmptoml; tmptoml="$(mktemp)" || return 1
+  {
+    printf '[images.%s]\n' "$VM_IMAGE_NAME"
+    printf 'base_dir = "%s"\n' "$VM_IMAGE_NAME"
+    printf 'docker_ref = "alpine@%s"\n' "$digest"
+    printf 'os_type = "Linux"\n'
+    printf 'kernel.image_url = "%s"\n' "$kimg"
+    printf 'kernel.modules_url = "%s"\n' "$kmod"
+    printf '\n'
+    printf '[images.alpine-latest]\n'
+    printf 'base_dir = "alpine"\n'
+    printf 'docker_ref = "alpine:latest"\n'
+    printf 'os_type = "Linux"\n'
+    printf 'kernel.image_url = "%s"\n' "$kimg"
+    printf 'kernel.modules_url = "%s"\n' "$kmod"
+  } > "$tmptoml"
+  install -o root -g wheel -m 0644 "$tmptoml" "$VM_ROOT/etc/anylinuxfs.toml" || { rm -f "$tmptoml"; return 1; }
+  rm -f "$tmptoml"
+  ok "$(t vm.staged "$VM_ROOT")"
+  return 0
+}
+
+# Print (dry-run) or run the ONE slow/networked/root build + strip step.
+_vm_build_rootfs() {   # <dryrun:true|false>
+  local dryrun="$1"
+  local bin="$VM_ROOT/bin/anylinuxfs"
+  # The stripped packages: drop volume managers / filesystems we do not mount;
+  # KEEP cryptsetup (BitLocker/LUKS), ntfs-3g, and nfs (the mount transport).
+  local del=(btrfs-progs lvm2 zfs xfsprogs)
+  if [[ "$dryrun" == "true" ]]; then
+    step "$(t vm.dryrun)"
+    printf '  KRUN_HOME=%q %q image install %s\n' "$VM_ROOTFS_HOME" "$bin" "$VM_IMAGE_NAME"
+    printf '  KRUN_HOME=%q %q apk del %s\n' "$VM_ROOTFS_HOME" "$bin" "${del[*]}"
+    warn "$(t vm.dryskip)"
+    return 0
+  fi
+  step "$(t vm.buildstep)"
+  KRUN_HOME="$VM_ROOTFS_HOME" "$bin" image install "$VM_IMAGE_NAME" || return 1
+  step "$(t vm.stripstep)"
+  KRUN_HOME="$VM_ROOTFS_HOME" "$bin" apk del "${del[@]}" || return 1
+  return 0
+}
+
+# Harden ownership of the rootfs home + built tree, then write the manifest.
+_vm_finalize() {   # <dryrun:true|false>
+  local dryrun="$1"
+  install -d -o root -g wheel -m 0755 "$VM_ROOTFS_HOME" || return 1
+  step "$(t vm.harden "$VM_ROOTFS_HOME")"
+  # chown -R root:wheel + strip group/other write across the staged tree + home.
+  chown -R root:wheel "$VM_ROOT" "$VM_ROOTFS_HOME" 2>/dev/null || return 1
+  chmod -R go-w "$VM_ROOT" "$VM_ROOTFS_HOME" 2>/dev/null || return 1
+
+  # Manifest: sha256 of the staged binary, kernel, modules.squashfs, and (when the
+  # rootfs was actually built) the built rootfs tree. In dry-run the rootfs does
+  # not exist yet, so only the staged binaries are hashed.
+  local tmpman; tmpman="$(mktemp)" || return 1
+  {
+    _vm_sha "$VM_ROOT/bin/anylinuxfs" "bin/anylinuxfs"
+    _vm_sha "$VM_ROOT/libexec/Image" "libexec/Image"
+    _vm_sha "$VM_ROOT/libexec/Image-4K" "libexec/Image-4K"
+    _vm_sha "$VM_ROOT/lib/modules.squashfs" "lib/modules.squashfs"
+    # Built rootfs tree hash: a stable digest over the file list + hashes.
+    if [[ "$dryrun" != "true" && -d "$VM_ROOTFS_HOME/.anylinuxfs" ]]; then
+      local treehash
+      treehash="$(cd "$VM_ROOTFS_HOME" && find .anylinuxfs -type f -exec shasum -a 256 {} + 2>/dev/null \
+        | sort | shasum -a 256 | awk '{print $1}')"
+      [[ -n "$treehash" ]] && printf '%s  rootfs-tree\n' "$treehash"
+    fi
+  } > "$tmpman"
+  install -o root -g wheel -m 0644 "$tmpman" "$VM_MANIFEST" || { rm -f "$tmpman"; return 1; }
+  rm -f "$tmpman"
+  ok "$(t vm.manifest "$VM_MANIFEST")"
+  return 0
+}
+
+# Core build pipeline shared by `vm build` and `vm update`. Fails CLOSED: on any
+# error it warns loudly (guidance to inspect + remove the half-staged tree)
+# rather than silently leaving a broken/half-owned /Library tree.
+_vm_do_build() {   # <cellar-prefix> <digest> <dryrun:true|false>
+  local prefix="$1" digest="$2" dryrun="$3"
+  if ! _vm_stage_tree "$prefix" "$digest" \
+     || ! _vm_build_rootfs "$dryrun" \
+     || ! _vm_finalize "$dryrun"; then
+    warn "$(t vm.failclean "$VM_ROOT" "$VM_BASE")"
+    return 1
+  fi
+  ok "$(t vm.buildok)"
+  info "${C_DIM}$(t vm.wire "$VM_ROOT/bin/anylinuxfs" "$VM_ROOTFS_HOME")${C_RESET}"
+  return 0
+}
+
+# Resolve the digest to pin from --digest (if given + valid) or the invoking
+# user's index.json. Prints the digest on stdout; dies with guidance if none.
+_vm_pick_digest() {   # <digest-arg-or-empty>
+  local arg="$1" dig
+  if [[ -n "$arg" ]]; then
+    _vm_is_digest "$arg" || die "$(t vm.baddigest "$arg")"
+    info "$(t vm.digestarg "$arg")" >&2
+    printf '%s' "$arg"; return 0
+  fi
+  info "$(t vm.digestask)" >&2
+  dig="$(_vm_resolve_index_digest 2>/dev/null || true)"
+  [[ -n "$dig" ]] || die "$(t vm.nodigest)"
+  info "$(t vm.digestfrom "$(_vm_invoking_user)" "$dig")" >&2
+  printf '%s' "$dig"
+}
+
+cmd_vm() {
+  local sub="${1:-}"; shift || true
+  local digest_arg="" dryrun="false" a
+  for a in "$@"; do
+    case "$a" in
+      --dry-run)  dryrun="true" ;;
+      --digest)   : ;;  # value is the NEXT arg; handled below
+      sha256:*)   digest_arg="$a" ;;
+      *)          warn "ignoring unknown arg: $a" ;;
+    esac
+  done
+  # Also honor the env dry-run hook (used by the smoke test) so a real build is
+  # never triggered under test.
+  [[ "${BLTUSB_VM_DRYRUN:-}" == "1" ]] && dryrun="true"
+
+  case "$sub" in
+    build)
+      _vm_require_root build
+      have_anylinuxfs || die "$(t vm.nobackend)"
+      local prefix; prefix="$(_vm_cellar_prefix)" || die "$(t vm.badprefix "$(command -v anylinuxfs 2>/dev/null || echo anylinuxfs)")"
+      info "$(t vm.prefix "$prefix")"
+      # Version awareness (warn only — never block staging).
+      local av; av="$(KRUN_HOME=/dev/null "$prefix/bin/anylinuxfs" --version 2>/dev/null | awk '{print $2}')"
+      [[ -n "$av" && "$av" != "$ANYLINUXFS_PINNED_VERSION" ]] \
+        && warn "$(t vm.verwarn "$av" "$ANYLINUXFS_PINNED_VERSION")"
+      local digest; digest="$(_vm_pick_digest "$digest_arg")" || exit 1
+      _vm_do_build "$prefix" "$digest" "$dryrun" || exit 1
+      ;;
+    update)
+      _vm_require_root update
+      have_anylinuxfs || die "$(t vm.nobackend)"
+      local prefix; prefix="$(_vm_cellar_prefix)" || die "$(t vm.badprefix "$(command -v anylinuxfs 2>/dev/null || echo anylinuxfs)")"
+      local old; old="$(_vm_staged_digest 2>/dev/null || true)"
+      [[ -n "$old" ]] || die "$(t vm.up.nocurrent "$VM_ROOT/etc/anylinuxfs.toml")"
+      step "$(t vm.up.resolve)"
+      local new; new="$(_vm_pick_digest "$digest_arg")" || exit 1
+      if [[ "$new" == "$old" ]]; then
+        info "$(t vm.up.same "$old")"
+        return 0
+      fi
+      info "$(t vm.up.oldnew "$old" "$new")"
+      printf '%s' "${C_CYN}$(t vm.up.confirm)${C_RESET}"
+      local ans; read -r ans
+      case "${ans:-N}" in [yY]*) : ;; *) die "$(t vm.up.cancelled)" ;; esac
+      _vm_do_build "$prefix" "$new" "$dryrun" || exit 1
+      ;;
+    status|"")
+      step "$(t vm.st.header)"
+      if [[ ! -d "$VM_ROOT" ]]; then
+        info "$(t vm.st.notbuilt)"
+        return 0
+      fi
+      local present digest chainok
+      # Staged backend + ownership.
+      if _vm_node_hardened "$VM_ROOT/bin/anylinuxfs"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
+      printf '  %-24s: %s\n' "$(t vm.st.root)" "$present"
+      printf '  %-24s: %s\n' "" "${C_DIM}${VM_ROOT}${C_RESET}"
+      # Pinned digest (from the staged toml).
+      digest="$(_vm_staged_digest 2>/dev/null || true)"
+      printf '  %-24s: %s\n' "$(t vm.st.digest)" "${digest:-$(t vm.st.none)}"
+      # Rootfs home + ownership.
+      if [[ -d "$VM_ROOTFS_HOME" ]]; then
+        if _vm_node_hardened "$VM_ROOTFS_HOME"; then present="$(t vm.st.present) — $(t vm.st.ownok)"; else present="$(t vm.st.present) — $(t vm.st.ownbad)"; fi
+      else present="$(t vm.st.absent)"; fi
+      printf '  %-24s: %s\n' "$(t vm.st.home)" "$present"
+      # Manifest.
+      if [[ -f "$VM_MANIFEST" ]]; then present="$(t vm.st.present)"; else present="$(t vm.st.absent)"; fi
+      printf '  %-24s: %s\n' "$(t vm.st.manifest)" "$present"
+      # Whole-chain verdict (mirror the helper's verifiedBackendPath).
+      if _vm_chain_hardened "$VM_ROOT/bin/anylinuxfs"; then chainok="$(t vm.st.ownok)"; else chainok="$(t vm.st.ownbad)"; fi
+      printf '  %-24s: %s\n' "$(t vm.st.chain)" "$chainok"
+      echo
+      if _vm_chain_hardened "$VM_ROOT/bin/anylinuxfs" && [[ -f "$VM_ROOT/bin/anylinuxfs" ]]; then
+        ok "$(t vm.st.accept)"
+      else
+        warn "$(t vm.st.reject)"
+      fi
+      ;;
+    *) die "$(t vm.usage)" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # Command: lang
 # ---------------------------------------------------------------------------
 cmd_lang() {
@@ -1731,6 +2117,7 @@ ${C_BOLD}Config & install${C_RESET}
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] Show/change configuration
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]       Forget a remembered drive password
   ${C_CYN}autounlock${C_RESET} [install|uninstall|status] Auto-mount drives (ro) on insert (personal-dev)
+  ${C_CYN}vm${C_RESET} [build|update|status]          Stage a pinned/minimal/root-owned Mode-B backend (build/update need sudo)
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]        Switch menu language (auto = follow system)
   ${C_CYN}version${C_RESET} / help                    Version / this help
 
@@ -1776,6 +2163,7 @@ ${C_BOLD}配置与安装${C_RESET}
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] 显示/修改配置
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘记某块盘记住的密码
   ${C_CYN}autounlock${C_RESET} [install|uninstall|status] 插入即自动只读挂载（个人/开发便利）
+  ${C_CYN}vm${C_RESET} [build|update|status]          暂存固定/最小/root 拥有的 Mode-B 后端（build/update 需 sudo）
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切换菜单语言（auto=跟随系统）
   ${C_CYN}version${C_RESET} / help                  版本 / 本帮助
 
@@ -1819,6 +2207,7 @@ ${C_BOLD}設定與安裝${C_RESET}
   ${C_CYN}config${C_RESET} [init|set-device|set-mode] 顯示/修改設定
   ${C_CYN}forget${C_RESET} [/dev/diskXsY|--all]      忘記某塊磁碟記住的密碼
   ${C_CYN}autounlock${C_RESET} [install|uninstall|status] 插入即自動唯讀掛載（個人/開發便利）
+  ${C_CYN}vm${C_RESET} [build|update|status]          暫存固定/最小/root 擁有的 Mode-B 後端（build/update 需 sudo）
   ${C_CYN}lang${C_RESET} [en|zh-CN|zh-TW|auto]      切換選單語言（auto=跟隨系統）
   ${C_CYN}version${C_RESET} / help                  版本 / 本說明
 
@@ -1864,6 +2253,7 @@ main() {
     config|cfg)           cmd_config "$@" ;;
     forget)               cmd_forget "$@" ;;
     autounlock|au)        cmd_autounlock "$@" ;;
+    vm)                   cmd_vm "$@" ;;
     __autounlock-daemon)  __autounlock_daemon ;;
     __autounlock-scan)    __autounlock_scan ;;
     lang|language)        cmd_lang "$@" ;;

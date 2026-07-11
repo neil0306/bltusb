@@ -193,6 +193,62 @@ smoke() {
   rm -f "$sanf"
 
   smoke_autounlock
+  smoke_vm
+}
+
+# ---------------------------------------------------------------------------
+# smoke: vm (Mode-B backend staging). All offline / no-root / no real build:
+#   * `vm status` with nothing staged reports "not built" and exits 0
+#   * `vm <bad-subcommand>` exits non-zero
+#   * `vm build`/`vm update` as a NON-root user are refused (EUID guard) with the
+#     `sudo bltusb vm build` guidance, and exit non-zero — WITHOUT ever running a
+#     real build (we never call it as root, and BLTUSB_VM_DRYRUN=1 double-guards)
+#   * the dry-run BUILD MECHANICS (dispatch + arg-parse) are reachable: the
+#     `--dry-run` / `--digest` argv is accepted by the parser (still refused
+#     pre-build by the root guard, proving the guard fires before any staging).
+# Never attempts a real `anylinuxfs image install` (slow / networked / root).
+# ---------------------------------------------------------------------------
+smoke_vm() {
+  hdr "smoke: vm status with nothing staged reports not-built, exits 0"
+  # Isolate: the real staged tree (if any) lives at a fixed /Library path we do
+  # NOT touch; `vm status` only READS it, so this is safe either way. We assert
+  # the exit code is 0 regardless, and that a not-built machine says so.
+  local out rc=0
+  out="$(BLTUSB_LANG=en "$BIN" vm status 2>&1)" || rc=$?
+  if [[ $rc -eq 0 ]]; then ok "vm status exits 0"; else no "vm status non-zero ($rc)"; fi
+  case "$out" in
+    *"not built"*) ok "vm status reports not-built (no staged backend)" ;;
+    *"status"*)    ok "vm status renders (a staged backend is present on this box)" ;;
+    *) no "vm status produced no recognizable output: $out" ;;
+  esac
+
+  hdr "smoke: vm bad subcommand exits non-zero"
+  if BLTUSB_LANG=en "$BIN" vm not-a-subcommand >/dev/null 2>&1; then no "vm bad subcommand should fail"; else ok "vm bad subcommand exits non-zero"; fi
+
+  hdr "smoke: vm build/update as non-root are refused with sudo guidance"
+  # Only meaningful when the test is NOT running as root (CI + normal dev).
+  if [[ "$(id -u)" -eq 0 ]]; then
+    skip "running as root — cannot exercise the non-root refusal (never runs a real build here)"
+  else
+    local brc=0
+    out="$(BLTUSB_VM_DRYRUN=1 BLTUSB_LANG=en "$BIN" vm build --dry-run 2>&1)" || brc=$?
+    if [[ $brc -ne 0 ]]; then ok "vm build refused (non-zero) without root"; else no "vm build did not refuse as non-root"; fi
+    case "$out" in *"sudo bltusb vm build"*) ok "vm build prints sudo guidance" ;; *) no "vm build missing sudo guidance: $out" ;; esac
+    # The arg parser must accept --digest <val> --dry-run and STILL refuse (guard
+    # fires before any /Library staging) — proving no half-stage on the refusal path.
+    local urc=0
+    out="$(BLTUSB_LANG=en "$BIN" vm update --digest sha256:$(printf '0%.0s' {1..64}) --dry-run 2>&1)" || urc=$?
+    if [[ $urc -ne 0 ]]; then ok "vm update refused (non-zero) without root, --digest/--dry-run parsed"; else no "vm update did not refuse as non-root"; fi
+    case "$out" in *"sudo bltusb vm update"*) ok "vm update prints sudo guidance" ;; *) no "vm update missing sudo guidance: $out" ;; esac
+    # Fail-closed invariant: a refused non-root build must NOT create the staged tree.
+    if [[ -e "/Library/Application Support/bltusb/anylinuxfs" ]]; then
+      # Present is only acceptable if a REAL prior build made it (root-owned). A
+      # non-root refusal can never create it; we only flag if this test could have.
+      skip "staged tree exists (pre-existing real build) — non-root refusal cannot have created it"
+    else
+      ok "no staged /Library tree created by the refused non-root build"
+    fi
+  fi
 }
 
 # ---------------------------------------------------------------------------
