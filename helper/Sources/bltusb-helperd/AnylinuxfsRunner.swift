@@ -22,21 +22,57 @@ import BltusbProtocol
 
 enum AnylinuxfsRunner {
 
-    /// TODO(signing/deploy): the FIXED, root-owned, non-user-writable, MDM-
-    /// installed path to the hardened anylinuxfs. It must NOT be resolved via
-    /// $PATH and must NOT be under ~/.anylinuxfs (S3: user-writable rootfs is a
-    /// trust violation). The value below is the intended install location; the
-    /// daemon verifies its Developer-ID signature + hash before every exec
-    /// (see verifyBackendIntegrity — stubbed, gated on a signing identity).
+    /// The FIXED absolute path to the anylinuxfs backend. NEVER $PATH-resolved,
+    /// NEVER client-supplied, NEVER under ~/.anylinuxfs.
+    ///
+    /// Two builds, one invariant (fixed absolute path):
+    ///
+    ///   · Mode A (production, default): the hardened, root-owned, non-user-
+    ///     writable, MDM-installed backend. `verifyBackendIntegrity` checks its
+    ///     Developer-ID signature + rootfs hash before every exec (S1–S3, S7).
+    ///
+    ///   · Mode B (`-D BLTUSB_SELFHOSTED`, personal self-hosted): the user-
+    ///     installed Homebrew backend at a FIXED absolute path
+    ///     `/opt/homebrew/bin/anylinuxfs`. This is the *user-installed* backend,
+    ///     NOT the hardened MDM one — its residuals (ad-hoc signed, user-writable
+    ///     ~/.anylinuxfs rootfs: R-supply / S3) are accepted for a personal
+    ///     machine and documented in AUTO-UNLOCK-RISK.md §4 and DEPLOY-MODES.md.
+    ///     It is still resolved from a FIXED constant (not $PATH), the argv is
+    ///     still Validators-allowlisted, and the passphrase is still scoped +
+    ///     zeroed. Mode A is byte-for-byte unaffected by this branch.
+    #if BLTUSB_SELFHOSTED
+    static let binaryPath = "/opt/homebrew/bin/anylinuxfs"
+    #else
     static let binaryPath = "/Library/Application Support/bltusb/anylinuxfs/bin/anylinuxfs"
+    #endif
 
-    /// TODO(signing/deploy): verify the backend is the pinned, hash-matched,
-    /// Developer-ID-signed artifact before exec (SRAA §5 S1–S3, S7). Requires a
-    /// deploy-time trust anchor; returns true here so the skeleton compiles.
+    /// Verify the backend is the artifact we expect before exec.
+    ///
+    /// Mode A (default): TODO(signing/deploy) — SecStaticCode + SecCodeCheckValidity
+    /// against the pinned Developer-ID designated requirement, plus a sha256 match
+    /// of the rootfs image (SRAA §5 S1–S3, S7). Stubbed true so the skeleton
+    /// compiles until a deploy-time trust anchor exists.
+    ///
+    /// Mode B (self-hosted): the Homebrew backend is ad-hoc signed (no Team ID to
+    /// pin), so the strongest cheap check available is that the FIXED path exists
+    /// and is a regular file NOT writable by group/other. This is a personal-
+    /// machine best effort, not the hardened Mode-A verification; the residual is
+    /// documented (AUTO-UNLOCK-RISK.md §4). Fail closed if the file is missing.
     static func verifyBackendIntegrity() -> Bool {
+        #if BLTUSB_SELFHOSTED
+        let fm = FileManager.default
+        guard let attrs = try? fm.attributesOfItem(atPath: binaryPath) else { return false }
+        guard (attrs[.type] as? FileAttributeType) == .typeRegular else { return false }
+        if let perms = (attrs[.posixPermissions] as? NSNumber)?.uint16Value,
+           (perms & 0o022) != 0 {
+            return false   // group/other-writable backend — refuse to exec
+        }
+        return true
+        #else
         // Real impl: SecStaticCode + SecCodeCheckValidity against the pinned
         // designated requirement, plus a sha256 match of the rootfs image.
         return true
+        #endif
     }
 
     /// Run `anylinuxfs mount` with a fixed argv and the secret scoped to this one

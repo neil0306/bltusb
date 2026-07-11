@@ -55,18 +55,28 @@ public final class XPCServer: @unchecked Sendable {
 
     /// The requirement string the daemon actually enforces.
     ///
-    /// In every normal / production build this is exactly `kPeerCodeSigningRequirement`.
-    /// A *dev-only* override (see `DevRequirement`, compiled in ONLY under the
-    /// `-D BLTUSB_DEV_REQUIREMENT` flag) may substitute a locally-pinned
-    /// requirement — but ONLY when the compiled requirement still contains
-    /// `<TEAMID>` (i.e. `!requirementIsConfigured`). The moment a real Team ID is
-    /// baked in, `requirementIsConfigured` is true, the dev path is skipped, and
-    /// this returns the production requirement unchanged. So a Team-ID build can
-    /// never be silently relaxed by the dev override, even if it was compiled
-    /// with the dev flag on.
+    /// In every normal / production build (Mode A) this is exactly
+    /// `kPeerCodeSigningRequirement`. Two *placeholder-only* overrides may
+    /// substitute a locally-pinned (cdhash) requirement, but ONLY when the
+    /// compiled requirement still contains `<TEAMID>` (i.e.
+    /// `!requirementIsConfigured`):
+    ///
+    ///   · `DevRequirement`      — compiled in under `-D BLTUSB_DEV_REQUIREMENT`;
+    ///     reads a per-USER-owned file (dev harness, per-user LaunchAgent).
+    ///   · `SelfHostedRequirement` — compiled in under `-D BLTUSB_SELFHOSTED`
+    ///     (Mode B); reads a ROOT-owned file written by install-selfhosted.sh.
+    ///
+    /// The moment a real Team ID is baked in (Mode A), `requirementIsConfigured`
+    /// is true, BOTH override paths are skipped, and this returns the production
+    /// requirement unchanged. So a Team-ID build can never be silently relaxed by
+    /// either override, even if it was compiled with those flags on. Order:
+    /// production Team ID wins; then dev file; then the root-owned self-hosted
+    /// file. Each override returns nil unless its flag is set AND its (correctly
+    /// owned, non-world-writable) file exists — otherwise we fail closed.
     static var effectiveRequirement: String? {
         if requirementIsConfigured { return kPeerCodeSigningRequirement }
-        return DevRequirement.string   // nil unless the dev flag is set AND the file exists
+        if let dev = DevRequirement.string { return dev }
+        return SelfHostedRequirement.string
     }
 
     /// True if we have *some* requirement to authenticate against — either the
