@@ -53,27 +53,54 @@ enum AnylinuxfsRunner {
     /// of the rootfs image (SRAA §5 S1–S3, S7). Stubbed true so the skeleton
     /// compiles until a deploy-time trust anchor exists.
     ///
-    /// Mode B (self-hosted): the Homebrew backend is ad-hoc signed (no Team ID to
-    /// pin), so the strongest cheap check available is that the FIXED path exists
-    /// and is a regular file NOT writable by group/other. This is a personal-
-    /// machine best effort, not the hardened Mode-A verification; the residual is
-    /// documented (AUTO-UNLOCK-RISK.md §4). Fail closed if the file is missing.
+    /// Mode B (self-hosted): the daemon runs as ROOT and EXECUTES this backend, so
+    /// if any non-root user can replace it — or reach it through a user-writable
+    /// parent directory or symlink — that is a local ROOT ESCALATION (the same
+    /// primitive as the removed --nopasswd path: unprivileged user controls
+    /// executable bytes -> authenticated op -> runs as root). Therefore we require
+    /// the resolved backend AND every ancestor directory to be owned by uid 0 and
+    /// not group/other-writable. FAIL CLOSED otherwise.
+    ///
+    /// A stock Homebrew backend is user-owned (Cellar) and its rootfs
+    /// (~/.anylinuxfs) is user-writable, so this check FAILS and Mode B `mount`
+    /// does not run until the FULL backend trust chain (binary + rootfs + deps) is
+    /// staged root-owned and verified — the Phase-2 supply-chain work (SRAA §5
+    /// S1–S3; DEPLOY-MODES.md). Metadata ops (list/probe) never exec the backend,
+    /// so they are unaffected. NOTE: a fully TOCTOU-safe design must exec the
+    /// verified root-owned file by descriptor; that hardening is Phase-2.
     static func verifyBackendIntegrity() -> Bool {
         #if BLTUSB_SELFHOSTED
-        let fm = FileManager.default
-        guard let attrs = try? fm.attributesOfItem(atPath: binaryPath) else { return false }
-        guard (attrs[.type] as? FileAttributeType) == .typeRegular else { return false }
-        if let perms = (attrs[.posixPermissions] as? NSNumber)?.uint16Value,
-           (perms & 0o022) != 0 {
-            return false   // group/other-writable backend — refuse to exec
-        }
-        return true
+        return backendChainIsRootOwned(binaryPath)
         #else
         // Real impl: SecStaticCode + SecCodeCheckValidity against the pinned
         // designated requirement, plus a sha256 match of the rootfs image.
         return true
         #endif
     }
+
+    #if BLTUSB_SELFHOSTED
+    /// True iff the symlink-resolved `path` and every ancestor directory up to `/`
+    /// are owned by uid 0 and not group/other-writable — so no non-root user can
+    /// substitute the executable or reach it via a writable parent.
+    static func backendChainIsRootOwned(_ path: String) -> Bool {
+        let fm = FileManager.default
+        // Resolve symlinks first: a user-owned symlink (e.g. Homebrew's) must not
+        // let a user redirect what we exec; we check the real target + real parents.
+        var p = (path as NSString).resolvingSymlinksInPath
+        while true {
+            guard let a = try? fm.attributesOfItem(atPath: p) else { return false }
+            guard let owner = (a[.ownerAccountID] as? NSNumber)?.uint32Value, owner == 0 else {
+                return false   // not root-owned -> a non-root user could swap it
+            }
+            if let perms = (a[.posixPermissions] as? NSNumber)?.uint16Value, (perms & 0o022) != 0 {
+                return false   // group/other-writable -> a non-root user could swap it
+            }
+            if p == "/" { return true }
+            let parent = (p as NSString).deletingLastPathComponent
+            p = parent.isEmpty ? "/" : parent
+        }
+    }
+    #endif
 
     /// Run `anylinuxfs mount` with a fixed argv and the secret scoped to this one
     /// child, zeroed after the child is spawned. Returns backendFailure on a

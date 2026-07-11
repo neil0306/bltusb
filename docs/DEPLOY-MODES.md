@@ -70,11 +70,34 @@ opposite by construction. Its invariants (all established by
 5. **Read-only by default.** `policyAllowsRW=false`; `rw` is policy-gated and off.
 6. **Passphrase hygiene, unchanged.** Delivered as zeroable XPC `data`, scoped to
    one child's `ALFS_PASSPHRASE`, zeroed after — never argv/log/temp/plist.
+7. **Root-owned BACKEND, enforced fail-closed.** The daemon runs `anylinuxfs` **as
+   root**, so root-owning our *own* binaries (invariant 1) is necessary but **not
+   sufficient**: if the backend it executes is user-writable, an attacker swaps
+   the backend and the legit client triggers a root exec of attacker bytes — the
+   *same* escalation as `--nopasswd`. So `verifyBackendIntegrity` requires the
+   resolved backend **and every ancestor directory** to be uid-0-owned and not
+   group/other-writable, and **fails closed** otherwise.
+
+> ⚠️ **Mode B `mount` is not operational on a stock backend — by design.** A
+> Homebrew `anylinuxfs` is **user-owned** (Cellar) and boots a **user-writable
+> `~/.anylinuxfs` rootfs**, so `verifyBackendIntegrity` **fails closed** and the
+> daemon **refuses to mount**. This is deliberate: it is safer to refuse than to
+> run a user-mutable backend as root. Making Mode B `mount` actually work
+> **safely** requires staging the **entire** anylinuxfs trust chain (binary +
+> rootfs + microVM deps) **root-owned and non-user-writable, verified before
+> exec** — the Phase-2 supply-chain hardening (SRAA §5 S1–S3 / §9 Alt-A), **not
+> yet automated**. Until then Mode B delivers the proven **zero-sudo IPC + caller
+> auth** (`list`/`probe`), and `mount` is gated. Root-owning only our launcher/
+> client while executing a user-writable backend would be a **local
+> privilege-escalation boundary**, not merely a supply-chain residual — so we
+> fail closed instead of shipping it.
 
 So Mode B is a **standing root service with an authenticated front door and
-root-owned code**, not passwordless root to a mutable path. The privilege is
-mediated by the 4-op allowlist + full server-side guards; the client cannot ask
-for anything the guards don't independently re-authorize.
+root-owned code** — but its *mount* capability is deliberately **gated on a
+fully root-owned backend chain**. The privilege is mediated by the 4-op allowlist
++ full server-side guards; the client cannot ask for anything the guards don't
+independently re-authorize; and the daemon will not exec a backend it cannot
+prove is root-owned.
 
 ### One-time Full Disk Access grant (required for MOUNTING)
 
