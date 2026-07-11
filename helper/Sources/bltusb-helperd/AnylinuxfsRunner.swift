@@ -100,9 +100,11 @@ enum AnylinuxfsRunner {
         while true {
             guard let a = try? fm.attributesOfItem(atPath: p) else { return false }
             guard let owner = (a[.ownerAccountID] as? NSNumber)?.uint32Value, owner == 0 else {
-                return false   // not root-owned -> a non-root user could swap it
+                return false   // not root-owned (or missing) -> fail closed
             }
-            if let perms = (a[.posixPermissions] as? NSNumber)?.uint16Value, (perms & 0o022) != 0 {
+            // Fail closed if the mode is missing/unparseable OR group/other-writable.
+            guard let perms = (a[.posixPermissions] as? NSNumber)?.uint16Value else { return false }
+            if (perms & 0o022) != 0 {
                 return false   // group/other-writable -> a non-root user could swap it
             }
             // POSIX mode + uid are not enough: a macOS ACL can grant a non-root
@@ -116,16 +118,24 @@ enum AnylinuxfsRunner {
         }
     }
 
-    /// True iff `path` carries at least one extended-ACL entry. Any ACL entry
-    /// could grant a non-root principal mutation rights (write_data/append/
-    /// add_file/add_subdirectory/delete/delete_child) that uid+mode checks miss,
-    /// so the root-owned-chain verifier rejects a component with ANY ACL.
+    /// Returns true if `path` has an extended ACL **or if ACL inspection could not
+    /// conclusively prove there is none** — i.e. it means "not provably ACL-free",
+    /// so the caller fails closed. Any ACL entry could grant a non-root principal
+    /// mutation rights (write_data/append/add_file/add_subdirectory/delete/
+    /// delete_child) that uid+mode checks miss; and an inconclusive inspection must
+    /// never be read as "safe". Only a definitively absent/empty ACL returns false.
     static func hasExtendedACL(_ path: String) -> Bool {
-        guard let acl = acl_get_file(path, ACL_TYPE_EXTENDED) else { return false }
+        errno = 0
+        guard let acl = acl_get_file(path, ACL_TYPE_EXTENDED) else {
+            // NULL is an ERROR, not "no ACL". Only ENOENT means "no extended ACL";
+            // any other errno is inconclusive -> fail closed (treat as present).
+            return errno != ENOENT
+        }
         defer { acl_free(UnsafeMutableRawPointer(acl)) }
         var entry = acl_entry_t?.none
-        // acl_get_entry returns 0 when it yields an entry -> at least one ACE.
-        return acl_get_entry(acl, ACL_FIRST_ENTRY.rawValue, &entry) == 0
+        // acl_get_entry: 0 = an entry exists (ACL present); 1 = no more entries
+        // (empty ACL, safe); -1 = error (inconclusive -> fail closed). Only 1 is OK.
+        return acl_get_entry(acl, ACL_FIRST_ENTRY.rawValue, &entry) != 1
     }
     #endif
 
