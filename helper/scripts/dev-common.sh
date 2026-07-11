@@ -5,6 +5,8 @@
 #
 # This harness NEVER installs a system/root daemon. It only bootstraps a
 # per-user (gui domain) LaunchAgent. It does not touch the bash `bltusb`.
+#
+# shellcheck disable=SC2034  # these are shared config vars, consumed by the dev-*.sh scripts that source this file
 set -euo pipefail
 
 # Repo layout
