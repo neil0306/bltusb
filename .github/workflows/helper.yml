@@ -3,6 +3,14 @@ name: Helper (Swift)
 # Phase-2 signed-helper foundation (helper/). Builds + runs the unit tests on a
 # macOS runner (which has a full toolchain, so `swift test` needs no extra flags,
 # unlike a Command-Line-Tools-only dev box). Free for public repositories.
+#
+# Two jobs:
+#   build-test          — REQUIRED, pinned to a fixed macOS image (macos-15). The
+#                         code is green there today; pinning ends "green locally,
+#                         red on the runner" toolchain drift.
+#   build-test-latest   — NON-required early warning on macos-latest with
+#                         continue-on-error, so a future Xcode/runner bump is
+#                         surfaced without failing required CI.
 
 on:
   push:
@@ -14,15 +22,46 @@ on:
 
 jobs:
   build-test:
-    runs-on: macos-latest
+    name: Build + test (pinned macos-15)
+    runs-on: macos-15
     defaults:
       run:
         working-directory: helper
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - name: Swift version
         run: swift --version
-      - name: Build
+      - name: Build (default / Mode A)
         run: swift build
+      - name: Build (self-hosted / Mode B)
+        # Compiles the `#if BLTUSB_SELFHOSTED` block (backendChainIsRootOwned,
+        # hasExtendedACL — the acl_* / errno C-interop) that the default build
+        # never touches, so a stricter toolchain can't silently break it.
+        run: swift build -Xswiftc -DBLTUSB_SELFHOSTED
+      - name: Build (dev-requirement path)
+        # Compiles the `#if BLTUSB_DEV_REQUIREMENT` override path too.
+        run: swift build -Xswiftc -DBLTUSB_DEV_REQUIREMENT
+      - name: Test
+        # Flag-free: the runner's full Xcode wires swift-testing. Do NOT add the
+        # CLT-only -F/-rpath flags here.
+        run: swift test
+
+  build-test-latest:
+    name: Build + test (macos-latest, early warning)
+    runs-on: macos-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: helper
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Swift version
+        run: swift --version
+      - name: Build (default / Mode A)
+        run: swift build
+      - name: Build (self-hosted / Mode B)
+        run: swift build -Xswiftc -DBLTUSB_SELFHOSTED
+      - name: Build (dev-requirement path)
+        run: swift build -Xswiftc -DBLTUSB_DEV_REQUIREMENT
       - name: Test
         run: swift test

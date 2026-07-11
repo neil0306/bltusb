@@ -9,9 +9,8 @@
 #      prove the negative case.
 #   3. Write the agent-owned peer-requirement.txt pinning the client's cdhash.
 #   4. Write the LaunchAgent plist (MachServices) and bootstrap it into gui/UID.
+# shellcheck source=helper/scripts/dev-common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-common.sh"
-
-CLT_FW="/Library/Developer/CommandLineTools/Library/Developer/Frameworks"
 
 log "1/4 swift build (dev requirement flag ON)"
 ( cd "$HELPER_DIR" && swift build \

@@ -2,10 +2,15 @@
 # dev-down.sh — tear the dev harness down and leave the machine as we found it.
 #   bootout the LaunchAgent from gui/UID, remove the plist, the pinned
 #   requirement, the staged/signed binaries, and the dev support dir.
+# shellcheck source=helper/scripts/dev-common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-common.sh"
 
 log "bootout LaunchAgent $LABEL from $GUI_DOMAIN"
-launchctl bootout "$GUI_DOMAIN/$LABEL" 2>/dev/null && ok "booted out" || warn "not loaded (already gone)"
+if launchctl bootout "$GUI_DOMAIN/$LABEL" 2>/dev/null; then
+  ok "booted out"
+else
+  warn "not loaded (already gone)"
+fi
 
 # Kill any lingering staged daemon process (should exit on bootout, but be sure).
 pkill -f "$DAEMON_DEV" 2>/dev/null && log "killed lingering daemon" || true

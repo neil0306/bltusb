@@ -3,6 +3,7 @@
 #   A. `diskutil list external physical` (ground truth).
 #   B. authorized client -> list-external over XPC => ACCEPTED, returns partitions.
 #   C. a DIFFERENT ("evil") ad-hoc binary -> list-external => REJECTED notAuthorized.
+# shellcheck source=helper/scripts/dev-common.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/dev-common.sh"
 
 echo "=================================================================="
