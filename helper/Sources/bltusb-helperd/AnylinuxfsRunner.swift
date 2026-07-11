@@ -105,10 +105,27 @@ enum AnylinuxfsRunner {
             if let perms = (a[.posixPermissions] as? NSNumber)?.uint16Value, (perms & 0o022) != 0 {
                 return false   // group/other-writable -> a non-root user could swap it
             }
+            // POSIX mode + uid are not enough: a macOS ACL can grant a non-root
+            // user write/delete/add even under uid-0 + no 022 bits. A backend
+            // staged root-owned by our installer carries NO extended ACL, so we
+            // conservatively FAIL CLOSED if any component has one.
+            if hasExtendedACL(p) { return false }
             if p == "/" { return true }
             let parent = (p as NSString).deletingLastPathComponent
             p = parent.isEmpty ? "/" : parent
         }
+    }
+
+    /// True iff `path` carries at least one extended-ACL entry. Any ACL entry
+    /// could grant a non-root principal mutation rights (write_data/append/
+    /// add_file/add_subdirectory/delete/delete_child) that uid+mode checks miss,
+    /// so the root-owned-chain verifier rejects a component with ANY ACL.
+    static func hasExtendedACL(_ path: String) -> Bool {
+        guard let acl = acl_get_file(path, ACL_TYPE_EXTENDED) else { return false }
+        defer { acl_free(UnsafeMutableRawPointer(acl)) }
+        var entry = acl_entry_t?.none
+        // acl_get_entry returns 0 when it yields an entry -> at least one ACE.
+        return acl_get_entry(acl, ACL_FIRST_ENTRY.rawValue, &entry) == 0
     }
     #endif
 

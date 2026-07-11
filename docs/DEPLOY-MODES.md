@@ -74,13 +74,13 @@ opposite by construction. Its invariants (all established by
    root**, so root-owning our *own* binaries (invariant 1) is necessary but **not
    sufficient**: if the backend it executes is user-writable, an attacker swaps
    the backend and the legit client triggers a root exec of attacker bytes — the
-   *same* escalation as `--nopasswd`. So `verifyBackendIntegrity` requires the
+   *same* escalation as `--nopasswd`. So `verifiedBackendPath()` requires the
    resolved backend **and every ancestor directory** to be uid-0-owned and not
    group/other-writable, and **fails closed** otherwise.
 
 > ⚠️ **Mode B `mount` is not operational on a stock backend — by design.** A
 > Homebrew `anylinuxfs` is **user-owned** (Cellar) and boots a **user-writable
-> `~/.anylinuxfs` rootfs**, so `verifyBackendIntegrity` **fails closed** and the
+> `~/.anylinuxfs` rootfs**, so `verifiedBackendPath()` **fails closed** and the
 > daemon **refuses to mount**. This is deliberate: it is safer to refuse than to
 > run a user-mutable backend as root. Making Mode B `mount` actually work
 > **safely** requires staging the **entire** anylinuxfs trust chain (binary +
@@ -148,7 +148,7 @@ The Mode-B path is gated so it is **unreachable** in a real Mode-A build:
   `-D BLTUSB_SELFHOSTED`; a default (Mode A) build reads no file.
 - `AnylinuxfsRunner.binaryPath` is the Homebrew path **only** under
   `-D BLTUSB_SELFHOSTED`; the default build keeps the hardened MDM path and the
-  (stubbed) Developer-ID `verifyBackendIntegrity`.
+  (stubbed) Developer-ID `verifiedBackendPath()`.
 
 Net: a Team-ID Mode-A daemon authenticates against the Team ID and execs the
 hardened backend — byte-for-byte unaffected by the Mode-B additions.
